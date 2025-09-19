@@ -85,6 +85,9 @@ const TILE_LIBRARY_DEFAULT: TileItem[] = [
   { key: "הורה", label: "אבא/אמא", icon: "PersonStanding", categories: ["רגשות ושיתוף"], rules: { ageMax: 18 } },
   { key: "ללמוד", label: "ללמוד", icon: "BookOpen", categories: ["יומיומי"], rules: { ageMin: 6, ageMax: 18 } },
   { key: "חדר כושר", label: "להתאמן", icon: "Activity", categories: ["יומיומי"], rules: { ageMin: 13 } },
+  // ארוחות
+  { key: "ארוחת בוקר", label: "ארוחת בוקר", icon: "Coffee", categories: ["צרכים בסיסיים"], rules: {} },
+  { key: "לחם", label: "לחם", icon: "Wheat", categories: ["צרכים בסיסיים"], rules: {} },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
