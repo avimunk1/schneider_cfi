@@ -61,8 +61,8 @@ const TILE_LIBRARY_DEFAULT: TileItem[] = [
   { key: "לשתות", label: "לשתות", icon: "CupSoda", categories: ["צרכים בסיסיים"], rules: {} },
   { key: "לשירותים", label: "שירותים", icon: "Landmark", categories: ["צרכים בסיסיים"], rules: {} },
   { key: "עייף", label: "עייף", icon: "BedDouble", categories: ["צרכים בסיסיים"], rules: {} },
-  { key: "טלוויזיה", label: "טלוויזיה", icon: "Tv", categories: ["רצונות ופעולות"], rules: {} },
-  { key: "טאבלט", label: "טאבלט", icon: "TabletSmartphone", categories: ["רצונות ופעולות"], rules: {} },
+  { key: "טלוויזיה", label: "טלוויזיה", icon: "Tv", categories: ["רצונות ופעולות"], rules: { sectorIn: ["דתי", "מסורתי", "חילוני", "מוסלמי"] } },
+  { key: "טאבלט", label: "טאבלט", icon: "TabletSmartphone", categories: ["רצונות ופעולות"], rules: { sectorIn: ["דתי", "מסורתי", "חילוני", "מוסלמי"] } },
   { key: "מוזיקה", label: "מוזיקה", icon: "Music4", categories: ["רצונות ופעולות"], rules: {} },
   { key: "לנגב פנים", label: "לנגב פנים", icon: "Hand", categories: ["רצונות ופעולות"], rules: {} },
   // רפואי
