@@ -134,7 +134,7 @@ function useDataLoader() {
 //                            לוגיקת יצירת הלוח
 // ──────────────────────────────────────────────────────────────────────────────
 
-function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], categoryOrder: string[]) {
+function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], categoryOrder: string[], selectedCategory?: string) {
   const { age, gender, sector, context } = profile || ({} as any);
 
   const allowed = tileLibrary.filter((t) => {
@@ -145,6 +145,8 @@ function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], 
     if (r.genderNot && gender && r.genderNot === gender) return false;
     if (r.sectorIn && sector && !r.sectorIn.includes(sector)) return false;
     if (r.contextIn && context && !r.contextIn.includes(context)) return false;
+    // Add category filtering
+    if (selectedCategory && selectedCategory !== "הכל" && !t.categories.includes(selectedCategory)) return false;
     return true;
   });
 
@@ -186,11 +188,11 @@ function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], 
   return result.slice(0, limit);
 }
 
-function useGeneratedTiles(profile: Profile, limit: number, tileLibrary: TileItem[], categoryStyles: Record<string, string>) {
+function useGeneratedTiles(profile: Profile, limit: number, tileLibrary: TileItem[], categoryStyles: Record<string, string>, selectedCategory?: string) {
   return useMemo(() => {
     const order = Object.keys(categoryStyles);
-    return computeTiles(profile, limit, tileLibrary, order);
-  }, [profile, limit, tileLibrary, categoryStyles]);
+    return computeTiles(profile, limit, tileLibrary, order, selectedCategory);
+  }, [profile, limit, tileLibrary, categoryStyles, selectedCategory]);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -311,11 +313,12 @@ export default function CommunicationBoardDemo() {
   const [preset, setPreset] = useState<"נער חרדי" | "גבר בן 70" | "נער מוסלמי דתי" | "מותאם">("נער חרדי");
   const [profile, setProfile] = useState<Profile>({ age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" });
   const [limit, setLimit] = useState(16);
+  const [selectedCategory, setSelectedCategory] = useState<string>("הכל");
   const boardRef = useRef<HTMLDivElement>(null);
 
   const { categoryStyles, tileLibrary } = useDataLoader();
 
-  const tiles = useGeneratedTiles(profile, limit, tileLibrary, categoryStyles);
+  const tiles = useGeneratedTiles(profile, limit, tileLibrary, categoryStyles, selectedCategory);
 
   const onPreset = (p: typeof preset) => {
     setPreset(p);
@@ -338,13 +341,25 @@ export default function CommunicationBoardDemo() {
       <h1 className="text-3xl font-bold">דמו – לוח תקשורת מותאם אישית</h1>
 
       <Card>
-        <CardContent className="p-4 grid md:grid-cols-4 gap-4 items-end">
+        <CardContent className="p-4 grid md:grid-cols-5 gap-4 items-end">
           <div className="space-y-1">
             <label className="text-sm">פרופיל מהיר</label>
             <select className="w-full border rounded-md p-2" value={preset} onChange={(e) => onPreset(e.target.value as any)}>
               {(["נער חרדי", "גבר בן 70", "נער מוסלמי דתי", "מותאם"] as const).map((k) => (
                 <option key={k} value={k}>
                   {k}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm">סוג פעילות</label>
+            <select className="w-full border rounded-md p-2" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+              <option value="הכל">הכל</option>
+              {Object.keys(categoryStyles).map((category) => (
+                <option key={category} value={category}>
+                  {category}
                 </option>
               ))}
             </select>
