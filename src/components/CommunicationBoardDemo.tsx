@@ -277,6 +277,10 @@ export default function CommunicationBoardDemo() {
   const [profile, setProfile] = useState<Profile>({ age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" });
   const [limit, setLimit] = useState(16);
   const [selectedCategory, setSelectedCategory] = useState<string>("הכל");
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiDescription, setAiDescription] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [agentStep, setAgentStep] = useState("");
   const boardRef = useRef<HTMLDivElement>(null);
 
   const { categoryStyles, tileLibrary } = useDataLoader();
@@ -300,6 +304,99 @@ export default function CommunicationBoardDemo() {
     link.download = `לוח-תקשורת_${profile.sector}_${profile.age}.png`;
     link.href = dataUrl;
     link.click();
+  };
+
+  const generateAIBoard = async () => {
+    if (!aiDescription.trim()) return;
+    
+    setIsGenerating(true);
+    
+    try {
+      // Agent thinking steps
+      const steps = [
+        "מנתח את התיאור בעברית...",
+        "מזהה מאפייני מטופל...",
+        "חיפוש אייקונים רלוונטיים...",
+        "בוחר קטגוריות מתאימות...",
+        "מתאים את הלוח לצרכים התרבותיים...",
+        "בונה לוח תקשורת מותאם..."
+      ];
+      
+      for (let i = 0; i < steps.length; i++) {
+        setAgentStep(steps[i]);
+        await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 400)); // Random delay for realism
+      }
+      
+      // Parse the Hebrew description and extract profile information
+      const parsedProfile = parseHebrewDescription(aiDescription);
+      
+      // Final step
+      setAgentStep("מסיים יצירת הלוח...");
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Update the profile and settings
+      setProfile(parsedProfile.profile);
+      setLimit(parsedProfile.tileCount);
+      setSelectedCategory(parsedProfile.category);
+      setPreset("מותאם");
+      
+      // Close modal and reset
+      setShowAIModal(false);
+      setAiDescription("");
+      setAgentStep("");
+      
+    } catch (error) {
+      console.error("Error generating AI board:", error);
+      setAgentStep("שגיאה ביצירת הלוח");
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      setIsGenerating(false);
+      setAgentStep("");
+    }
+  };
+
+  const parseHebrewDescription = (description: string): { profile: Profile, tileCount: number, category: string } => {
+    // Simple Hebrew text analysis - in real implementation, this would use proper NLP
+    const text = description.toLowerCase();
+    
+    // Extract age
+    let age = 15;
+    const ageMatch = text.match(/(\d+)\s*(שנ|גיל)/);
+    if (ageMatch) age = parseInt(ageMatch[1]);
+    
+    // Extract gender
+    let gender = "בן";
+    if (text.includes("בת") || text.includes("ילדה") || text.includes("אישה")) gender = "ילדה";
+    if (text.includes("גבר") && age > 18) gender = "גבר";
+    if (text.includes("אישה") && age > 18) gender = "אישה";
+    
+    // Extract sector
+    let sector = "חילוני";
+    if (text.includes("חרדי") || text.includes("דתי")) sector = "חרדי";
+    else if (text.includes("מסורתי")) sector = "מסורתי";
+    else if (text.includes("מוסלמי")) sector = "מוסלמי";
+    
+    // Extract context
+    let context: string = "מחלקה";
+    if (text.includes("טיפול נמרץ") || text.includes("נמרץ")) context = "טיפול נמרץ";
+    else if (text.includes("בית")) context = "בית";
+    
+    // Extract category preference
+    let category = "הכל";
+    if (text.includes("רפואי") || text.includes("כאב") || text.includes("תרופ")) category = "רפואי";
+    else if (text.includes("אוכל") || text.includes("שתי") || text.includes("בסיס")) category = "צרכים בסיסיים";
+    else if (text.includes("רגש") || text.includes("דיבור")) category = "רגשות ושיתוף";
+    
+    // Extract tile count
+    let tileCount = 16;
+    if (text.includes("הרבה") || text.includes("גדול")) tileCount = 20;
+    else if (text.includes("מעט") || text.includes("קטן")) tileCount = 12;
+    
+    return {
+      profile: { age, gender, sector, context },
+      tileCount,
+      category
+    };
   };
 
   return (
@@ -422,6 +519,9 @@ export default function CommunicationBoardDemo() {
           </div>
 
           <div className="md:col-span-2 flex gap-2">
+            <Button onClick={() => setShowAIModal(true)} className="gap-2 bg-purple-600 hover:bg-purple-700">
+              <Lucide.Sparkles className="w-4 h-4" /> יצירת לוח חכם
+            </Button>
             <Button onClick={downloadPNG} className="gap-2">
               <Lucide.Download className="w-4 h-4" /> הורדה כ‑PNG
             </Button>
@@ -438,6 +538,86 @@ export default function CommunicationBoardDemo() {
           </div>
         </div>
       </A4Frame>
+
+      {/* AI Generation Modal */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Lucide.Sparkles className="w-5 h-5 text-purple-600" />
+                  יצירת לוח תקשורת חכם
+                </h3>
+                <Button
+                  onClick={() => setShowAIModal(false)}
+                  className="p-1 h-8 w-8"
+                >
+                  <Lucide.X className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    הסבר בשפה חופשית מה תרצה לכלול בלוח
+                  </label>
+                  <p className="text-sm text-gray-600 mb-3">
+                    כלול בבקשה את מאפייני המטופל והלוח הנדרש. לדוגמה: "ילד בן 8 בטיפול נמרץ עם פגיעת ראש, צריך לוח רפואי עם אפשרויות כאב ותקשורת בסיסית"
+                  </p>
+                  <textarea
+                    className="w-full border rounded-md p-3 h-32 resize-none"
+                    placeholder="תאר את המטופל והלוח הנדרש..."
+                    value={aiDescription}
+                    onChange={(e) => setAiDescription(e.target.value)}
+                    dir="rtl"
+                  />
+                </div>
+                
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    onClick={() => setShowAIModal(false)}
+                    className="bg-gray-500 hover:bg-gray-600"
+                  >
+                    ביטול
+                  </Button>
+                  <Button
+                    onClick={generateAIBoard}
+                    disabled={!aiDescription.trim() || isGenerating}
+                    className="bg-purple-600 hover:bg-purple-700 gap-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Lucide.Loader2 className="w-4 h-4 animate-spin" />
+                        יוצר לוח...
+                      </>
+                    ) : (
+                      <>
+                        <Lucide.Wand2 className="w-4 h-4" />
+                        צור לוח חכם
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Agent thinking process */}
+                {isGenerating && agentStep && (
+                  <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse"></div>
+                        <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                        <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                      </div>
+                      <span className="text-purple-800 font-medium">{agentStep}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
     </div>
   );
