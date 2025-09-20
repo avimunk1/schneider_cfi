@@ -97,6 +97,23 @@ const TILE_LIBRARY_DEFAULT: TileItem[] = [
   { key: "לא מבין", label: "לא מבין", icon: "HelpCircle", categories: ["רגשות ושיתוף"], rules: {} },
   { key: "כן", label: "כן", icon: "Check", categories: ["רגשות ושיתוף"], rules: {} },
   { key: "לא", label: "לא", icon: "X", categories: ["רגשות ושיתוף"], rules: {} },
+  // Additional Medical Icons from Lucide
+  { key: "אמבולנס", label: "אמבולנס", icon: "Ambulance", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "לב", label: "לב", icon: "Heart", categories: ["רפואי"], rules: {} },
+  { key: "דופק", label: "דופק", icon: "Activity", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "זריקה", label: "זריקה", icon: "Syringe", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "פצע", label: "פצע", icon: "Bandage", categories: ["רפואי"], rules: {} },
+  { key: "רנטגן", label: "רנטגן", icon: "Scan", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "אחות", label: "אחות", icon: "UserCheck", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "מיטה רפואית", label: "מיטה רפואית", icon: "Bed", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "חמצן", label: "חמצן", icon: "Wind", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "עין", label: "עין", icon: "Eye", categories: ["רפואי"], rules: {} },
+  { key: "אוזן", label: "אוזן", icon: "Ear", categories: ["רפואי"], rules: {} },
+  { key: "שיניים", label: "שיניים", icon: "Smile", categories: ["רפואי"], rules: {} },
+  { key: "בטן", label: "בטן", icon: "Circle", categories: ["רפואי"], rules: {} },
+  { key: "גב", label: "גב", icon: "User", categories: ["רפואי"], rules: {} },
+  { key: "רגל", label: "רגל", icon: "Footprints", categories: ["רפואי"], rules: {} },
+  { key: "יד", label: "יד", icon: "Hand", categories: ["רפואי"], rules: {} },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -236,72 +253,6 @@ function Legend({ categoryStyles }: { categoryStyles: Record<string, string> }) 
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-//                                Diagnostics
-// ──────────────────────────────────────────────────────────────────────────────
-
-function Diagnostics({ tileLibrary, categoryStyles }: { tileLibrary: TileItem[]; categoryStyles: Record<string, string> }) {
-  const iconNames = Array.from(new Set(tileLibrary.map((t) => t.icon)));
-  const missingIcons = iconNames.filter((n) => !(n in (Lucide as any)));
-  const missingCategories = tileLibrary.flatMap((t) => t.categories).filter((c) => !categoryStyles[c]);
-
-  // Sample profiles (existing)
-  const PRESETS = {
-    "נער חרדי": { age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" } as Profile,
-    "גבר בן 70": { age: 70, gender: "גבר", sector: "חילוני", context: "מחלקה" } as Profile,
-    "נער מוסלמי דתי": { age: 15, gender: "בן", sector: "מוסלמי", context: "מחלקה" } as Profile,
-  } as const;
-
-  const sampleProfiles: Profile[] = [PRESETS["נער חרדי"], PRESETS["גבר בן 70"], PRESETS["נער מוסלמי דתי"], { age: 12, gender: "בן", sector: "חילוני", context: "בית" }];
-  const generationOk = sampleProfiles.every((p) => {
-    try {
-      const arr = computeTiles(p, 12, tileLibrary, Object.keys(categoryStyles));
-      return Array.isArray(arr) && arr.length > 0;
-    } catch {
-      return false;
-    }
-  });
-
-  // ✅ Additional tests (additive, don't change existing ones)
-  const hasTile = (key: string, arr: TileItem[]) => arr.some((t) => t.key === key);
-
-  // Age threshold: "gym" ageMin 13
-  const tilesAge12 = computeTiles({ age: 12, gender: "בן", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
-  const tilesAge13 = computeTiles({ age: 13, gender: "בן", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
-  const ageBoundaryOk = !hasTile("חדר כושר", tilesAge12) && hasTile("חדר כושר", tilesAge13);
-
-  // Context: medical items require ward/intensive care
-  const tilesHome = computeTiles({ age: 30, gender: "גבר", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
-  const tilesClinic = computeTiles({ age: 30, gender: "גבר", sector: "חילוני", context: "מחלקה" }, 24, tileLibrary, Object.keys(categoryStyles));
-  const contextFilterOk = !hasTile("בדיקה רפואית", tilesHome) && hasTile("בדיקה רפואית", tilesClinic);
-
-  // Sector: Sabbath should not appear for Muslim
-  const tilesMuslim = computeTiles(PRESETS["נער מוסלמי דתי"], 24, tileLibrary, Object.keys(categoryStyles));
-  const sectorExclusionOk = !hasTile("שבת", tilesMuslim);
-
-  const allGreen = generationOk && missingIcons.length === 0 && missingCategories.length === 0;
-
-  return (
-    <Card>
-      <CardContent className="p-4 text-sm">
-        <div className="font-medium mb-2">בדיקות דמו</div>
-        <ul className="list-disc pr-4 space-y-1">
-          <li>יצירת לוח עבור פרופילים לדוגמה: {generationOk ? "עובר" : "נכשל"}</li>
-          <li>אייקונים חסרים ב-lucide-react: {missingIcons.length === 0 ? "אין" : missingIcons.join(", ")}</li>
-          <li>קטגוריות ללא צבע מוגדר: {missingCategories.length === 0 ? "אין" : missingCategories.join(", ")}</li>
-        </ul>
-        {allGreen && <div className="mt-2 text-emerald-700">✔ כל הבדיקות הבסיסיות עברו.</div>}
-
-        <div className="mt-4 font-medium">בדיקות נוספות</div>
-        <ul className="list-disc pr-4 space-y-1">
-          <li>בדיקת גיל סף (12/13) ל"חדר כושר": {ageBoundaryOk ? "עובר" : "נכשל"}</li>
-          <li>סינון לפי הקשר (בית/מחלקה) ל"בדיקה רפואית": {contextFilterOk ? "עובר" : "נכשל"}</li>
-          <li>אי הכללת "שבת" לפרופיל מוסלמי: {sectorExclusionOk ? "עובר" : "נכשל"}</li>
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
 
 function A4Frame({ children, title, categoryStyles }: { children: React.ReactNode; title: string; categoryStyles: Record<string, string> }) {
   return (
@@ -353,7 +304,24 @@ export default function CommunicationBoardDemo() {
 
   return (
     <div dir="rtl" className="mx-auto max-w-6xl p-6 space-y-6">
-      <h1 className="text-3xl font-bold">דמו – לוח תקשורת מותאם אישית</h1>
+      {/* Schneider Logo Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <img 
+            src="/schneider-logo.png" 
+            alt="Schneider Children's Medical Center" 
+            className="h-16 w-auto"
+            onError={(e) => {
+              // Fallback if logo not found
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div>
+            <h1 className="text-3xl font-bold">לוח תקשורת מותאם אישית</h1>
+            <p className="text-sm text-gray-600">מרכז שניידר לרפואת ילדים</p>
+          </div>
+        </div>
+      </div>
 
       <Card>
         <CardContent className="p-4 grid md:grid-cols-5 gap-4 items-end">
@@ -471,11 +439,6 @@ export default function CommunicationBoardDemo() {
         </div>
       </A4Frame>
 
-      <Diagnostics tileLibrary={tileLibrary} categoryStyles={categoryStyles} />
-
-      <div className="text-sm text-muted-foreground leading-relaxed">
-        * ניתן להכניס קבצי JSON אל public ולהזינם בזמן ריצה (fetch). אם אינם קיימים, נטען ברירות מחדל.
-      </div>
     </div>
   );
 }
