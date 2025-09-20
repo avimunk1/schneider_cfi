@@ -7,7 +7,6 @@
 //    it's better not to rely on dynamic import. Here we use soft fetch at runtime with fallback to Defaults.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import * as Lucide from "lucide-react"; // Centralized import + smart fallback
 import * as htmlToImage from "html-to-image";
