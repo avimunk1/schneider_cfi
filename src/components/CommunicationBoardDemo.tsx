@@ -114,6 +114,15 @@ const TILE_LIBRARY_DEFAULT: TileItem[] = [
   { key: "גב", label: "גב", icon: "User", categories: ["רפואי"], rules: {} },
   { key: "רגל", label: "רגל", icon: "Footprints", categories: ["רפואי"], rules: {} },
   { key: "יד", label: "יד", icon: "Hand", categories: ["רפואי"], rules: {} },
+  // Additional tiles for common pediatric ICU needs
+  { key: "שמיכה", label: "שמיכה", icon: "Shirt", categories: ["צרכים בסיסיים"], rules: {} },
+  { key: "גבס", label: "גבס", icon: "Bandage", categories: ["רפואי"], rules: {} },
+  { key: "מגרד", label: "מגרד", icon: "Zap", categories: ["רפואי"], rules: {} },
+  { key: "שורף", label: "שורף", icon: "Flame", categories: ["רפואי"], rules: {} },
+  { key: "אמא", label: "אמא", icon: "Heart", categories: ["רגשות ושיתוף"], rules: { ageMax: 18 } },
+  { key: "אבא", label: "אבא", icon: "User", categories: ["רגשות ושיתוף"], rules: { ageMax: 18 } },
+  { key: "מפחד", label: "מפחד", icon: "Frown", categories: ["רגשות ושיתוף"], rules: {} },
+  { key: "רוצה הביתה", label: "רוצה הביתה", icon: "Home", categories: ["רגשות ושיתוף"], rules: {} },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -278,7 +287,7 @@ export default function CommunicationBoardDemo() {
   const [limit, setLimit] = useState(16);
   const [selectedCategory, setSelectedCategory] = useState<string>("הכל");
   const [showAIModal, setShowAIModal] = useState(false);
-  const [aiDescription, setAiDescription] = useState("");
+  const [aiDescription, setAiDescription] = useState("תכין לי לוח לילדה בת 5 המאושפזת בטיפול נמרץ שיכלול תמונות בנושאים הבאים:\nכואב לי ; קר לי ; שמיכה\nאחות ; גבס ; מגרד ; שורף\nאמא ; מפחד");
   const [isGenerating, setIsGenerating] = useState(false);
   const [agentStep, setAgentStep] = useState("");
   const boardRef = useRef<HTMLDivElement>(null);
@@ -356,19 +365,20 @@ export default function CommunicationBoardDemo() {
   };
 
   const parseHebrewDescription = (description: string): { profile: Profile, tileCount: number, category: string } => {
-    // Simple Hebrew text analysis - in real implementation, this would use proper NLP
+    // Enhanced Hebrew text analysis for medical scenarios
     const text = description.toLowerCase();
     
-    // Extract age
+    // Extract age - more flexible patterns
     let age = 15;
-    const ageMatch = text.match(/(\d+)\s*(שנ|גיל)/);
+    const ageMatch = text.match(/(\d+)\s*(שנ|גיל|בת|בן)/);
     if (ageMatch) age = parseInt(ageMatch[1]);
     
-    // Extract gender
+    // Extract gender - more patterns
     let gender = "בן";
-    if (text.includes("בת") || text.includes("ילדה") || text.includes("אישה")) gender = "ילדה";
-    if (text.includes("גבר") && age > 18) gender = "גבר";
-    if (text.includes("אישה") && age > 18) gender = "אישה";
+    if (text.includes("בת") || text.includes("ילדה")) gender = "ילדה";
+    else if (text.includes("אישה") && age > 18) gender = "אישה";
+    else if (text.includes("גבר") && age > 18) gender = "גבר";
+    else if (age <= 18 && text.includes("בן")) gender = "בן";
     
     // Extract sector
     let sector = "חילוני";
@@ -376,20 +386,27 @@ export default function CommunicationBoardDemo() {
     else if (text.includes("מסורתי")) sector = "מסורתי";
     else if (text.includes("מוסלמי")) sector = "מוסלמי";
     
-    // Extract context
+    // Extract context - more medical terms
     let context: string = "מחלקה";
-    if (text.includes("טיפול נמרץ") || text.includes("נמרץ")) context = "טיפול נמרץ";
+    if (text.includes("טיפול נמרץ") || text.includes("נמרץ") || text.includes("מאושפז")) context = "טיפול נמרץ";
     else if (text.includes("בית")) context = "בית";
     
-    // Extract category preference
+    // Enhanced category detection
     let category = "הכל";
-    if (text.includes("רפואי") || text.includes("כאב") || text.includes("תרופ")) category = "רפואי";
-    else if (text.includes("אוכל") || text.includes("שתי") || text.includes("בסיס")) category = "צרכים בסיסיים";
-    else if (text.includes("רגש") || text.includes("דיבור")) category = "רגשות ושיתוף";
+    const medicalTerms = ["כאב", "תרופ", "רפואי", "גבס", "מגרד", "שורף", "אחות", "דופק"];
+    const emotionalTerms = ["מפחד", "אמא", "אבא", "רגש", "דיבור", "הביתה"];
+    const basicTerms = ["אוכל", "שתי", "בסיס", "שמיכה", "קר", "חם"];
     
-    // Extract tile count
+    if (medicalTerms.some(term => text.includes(term))) category = "רפואי";
+    else if (emotionalTerms.some(term => text.includes(term))) category = "רגשות ושיתוף";
+    else if (basicTerms.some(term => text.includes(term))) category = "צרכים בסיסיים";
+    
+    // Extract tile count - count specific items mentioned
     let tileCount = 16;
-    if (text.includes("הרבה") || text.includes("גדול")) tileCount = 20;
+    const itemCount = (text.match(/\n/g) || []).length; // Count line breaks as items
+    if (itemCount > 8) tileCount = 20;
+    else if (itemCount > 0 && itemCount <= 6) tileCount = 12;
+    else if (text.includes("הרבה") || text.includes("גדול")) tileCount = 20;
     else if (text.includes("מעט") || text.includes("קטן")) tileCount = 12;
     
     return {
@@ -519,12 +536,32 @@ export default function CommunicationBoardDemo() {
           </div>
 
           <div className="md:col-span-2 flex gap-2">
-            <Button onClick={() => setShowAIModal(true)} className="gap-2 bg-purple-600 hover:bg-purple-700">
-              <Lucide.Sparkles className="w-4 h-4" /> יצירת לוח חכם
-            </Button>
-            <Button onClick={downloadPNG} className="gap-2">
-              <Lucide.Download className="w-4 h-4" /> הורדה כ‑PNG
-            </Button>
+            <button 
+              onClick={() => setShowAIModal(true)} 
+              className="px-4 py-2 rounded-md font-medium flex items-center gap-2"
+              style={{ 
+                backgroundColor: '#7c3aed', 
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Lucide.Sparkles className="w-4 h-4" style={{ color: 'white' }} /> 
+              <span style={{ color: 'white' }}>יצירת לוח חכם</span>
+            </button>
+            <button 
+              onClick={downloadPNG} 
+              className="px-4 py-2 rounded-md font-medium flex items-center gap-2"
+              style={{ 
+                backgroundColor: '#3b82f6', 
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Lucide.Download className="w-4 h-4" style={{ color: 'white' }} /> 
+              <span style={{ color: 'white' }}>הורדה כ‑PNG</span>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -544,17 +581,11 @@ export default function CommunicationBoardDemo() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2">
                   <Lucide.Sparkles className="w-5 h-5 text-purple-600" />
                   יצירת לוח תקשורת חכם
                 </h3>
-                <Button
-                  onClick={() => setShowAIModal(false)}
-                  className="p-1 h-8 w-8"
-                >
-                  <Lucide.X className="w-4 h-4" />
-                </Button>
               </div>
               
               <div className="space-y-4">
@@ -565,39 +596,67 @@ export default function CommunicationBoardDemo() {
                   <p className="text-sm text-gray-600 mb-3">
                     כלול בבקשה את מאפייני המטופל והלוח הנדרש. לדוגמה: "ילד בן 8 בטיפול נמרץ עם פגיעת ראש, צריך לוח רפואי עם אפשרויות כאב ותקשורת בסיסית"
                   </p>
-                  <textarea
-                    className="w-full border rounded-md p-3 h-32 resize-none"
-                    placeholder="תאר את המטופל והלוח הנדרש..."
-                    value={aiDescription}
-                    onChange={(e) => setAiDescription(e.target.value)}
-                    dir="rtl"
-                  />
+                  <div className="relative">
+                    <textarea
+                      className="w-full border rounded-md p-3 h-32 resize-none"
+                      placeholder="תאר את המטופל והלוח הנדרש..."
+                      value={aiDescription}
+                      onChange={(e) => setAiDescription(e.target.value)}
+                      dir="rtl"
+                    />
+                    <button
+                      onClick={() => setAiDescription("")}
+                      className="absolute top-2 left-2 p-1 h-6 w-6 rounded"
+                      title="נקה טקסט"
+                      style={{
+                        backgroundColor: '#9ca3af',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Lucide.X className="w-3 h-3" style={{ color: 'white' }} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="flex gap-3 justify-end">
-                  <Button
+                  <button
                     onClick={() => setShowAIModal(false)}
-                    className="bg-gray-500 hover:bg-gray-600"
+                    className="px-4 py-2 rounded-md text-white font-medium"
+                    style={{ 
+                      backgroundColor: '#6b7280', 
+                      color: 'white',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
                   >
                     ביטול
-                  </Button>
-                  <Button
+                  </button>
+                  <button
                     onClick={generateAIBoard}
                     disabled={!aiDescription.trim() || isGenerating}
-                    className="bg-purple-600 hover:bg-purple-700 gap-2"
+                    className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                    style={{ 
+                      backgroundColor: isGenerating || !aiDescription.trim() ? '#9ca3af' : '#7c3aed', 
+                      color: 'white',
+                      border: 'none',
+                      cursor: isGenerating || !aiDescription.trim() ? 'not-allowed' : 'pointer',
+                      opacity: isGenerating || !aiDescription.trim() ? '0.6' : '1'
+                    }}
                   >
                     {isGenerating ? (
                       <>
-                        <Lucide.Loader2 className="w-4 h-4 animate-spin" />
-                        יוצר לוח...
+                        <Lucide.Loader2 className="w-4 h-4 animate-spin" style={{ color: 'white' }} />
+                        <span style={{ color: 'white' }}>יוצר לוח...</span>
                       </>
                     ) : (
                       <>
-                        <Lucide.Wand2 className="w-4 h-4" />
-                        צור לוח חכם
+                        <Lucide.Wand2 className="w-4 h-4" style={{ color: 'white' }} />
+                        <span style={{ color: 'white' }}>צור לוח חכם</span>
                       </>
                     )}
-                  </Button>
+                  </button>
                 </div>
                 
                 {/* Agent thinking process */}
