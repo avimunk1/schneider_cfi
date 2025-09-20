@@ -1,32 +1,32 @@
-// 📦 הוראות הרצה מקומית (CLI):
-// 1) צור פרויקט React מינימלי (Vite/Next/CRA).
-// 2) התקן תלויות: npm i react react-dom lucide-react html-to-image
-// 3) התקן Tailwind ו/או השתמש בקומפוננטות שוות ערך במקום shadcn/ui.
-// 4) שמור קובץ זה כ-CommunicationBoardDemo.tsx והצג אותו ב-Entry Point.
-// 5) (אופציונלי) ניתן לספק נתונים חיצוניים בקבצי JSON (ראה למטה), אך בסביבה סגורה/סנדבוקס
-//    עדיף לא להסתמך על dynamic import. כאן עוברים ל-fetch רך בזמן ריצה עם נפילה ל-Defaults.
+// 📦 Local development instructions (CLI):
+// 1) Create a minimal React project (Vite/Next/CRA).
+// 2) Install dependencies: npm i react react-dom lucide-react html-to-image
+// 3) Install Tailwind and/or use equivalent components instead of shadcn/ui.
+// 4) Save this file as CommunicationBoardDemo.tsx and display it in Entry Point.
+// 5) (Optional) You can provide external data in JSON files (see below), but in a closed/sandbox environment
+//    it's better not to rely on dynamic import. Here we use soft fetch at runtime with fallback to Defaults.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import * as Lucide from "lucide-react"; // ייבוא מרוכז + fallback חכם
+import * as Lucide from "lucide-react"; // Centralized import + smart fallback
 import * as htmlToImage from "html-to-image";
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                               טיפוסים
+//                               Types
 // ──────────────────────────────────────────────────────────────────────────────
 
 type Profile = {
   age: number;
   gender: "בן" | "גבר" | "אישה" | "ילדה" | string;
   sector: "חרדי" | "דתי" | "מסורתי" | "חילוני" | "מוסלמי" | string;
-  context: "מחלקה" | "בית" | "בית חולים" | "מרפאה" | string;
+  context: "מחלקה" | "טיפול נמרץ" | "בית" | string;
 };
 
 type TileItem = {
   key: string;
   label: string;
-  icon: string; // שם אייקון מ-lucide או מפתח מפה לוגי
+  icon: string; // Icon name from lucide or logical mapping key
   categories: string[];
   rules?: {
     ageMin?: number;
@@ -39,7 +39,7 @@ type TileItem = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                   נתוני ברירת מחדל (נוחים להרצה כאן ומיד)
+//                   Default data (convenient for running here immediately)
 // ──────────────────────────────────────────────────────────────────────────────
 
 const CATEGORY_STYLES_DEFAULT: Record<string, string> = {
@@ -52,7 +52,7 @@ const CATEGORY_STYLES_DEFAULT: Record<string, string> = {
 };
 
 const TILE_LIBRARY_DEFAULT: TileItem[] = [
-  // בסיסי
+  // Basic
   { key: "לא נוח לי", label: "לא נוח לי", icon: "VenetianMask", categories: ["רגשות ושיתוף"], rules: {} },
   { key: "חם לי", label: "חם לי", icon: "Sun", categories: ["צרכים בסיסיים"], rules: {} },
   { key: "קר לי", label: "קר לי", icon: "Gauge", categories: ["צרכים בסיסיים"], rules: {} },
@@ -65,36 +65,45 @@ const TILE_LIBRARY_DEFAULT: TileItem[] = [
   { key: "טאבלט", label: "טאבלט", icon: "TabletSmartphone", categories: ["רצונות ופעולות"], rules: { sectorIn: ["דתי", "מסורתי", "חילוני", "מוסלמי"] } },
   { key: "מוזיקה", label: "מוזיקה", icon: "Music4", categories: ["רצונות ופעולות"], rules: {} },
   { key: "לנגב פנים", label: "לנגב פנים", icon: "Hand", categories: ["רצונות ופעולות"], rules: {} },
-  // רפואי
-  { key: "בדיקה רפואית", label: "בדיקה רפואית", icon: "Stethoscope", categories: ["רפואי"], rules: { contextIn: ["בית חולים", "מרפאה"] } },
-  { key: "בדיקת דם", label: "בדיקת דם", icon: "Droplets", categories: ["רפואי"], rules: { contextIn: ["בית חולים", "מרפאה"] } },
-  { key: "חום", label: "למדוד חום", icon: "Thermometer", categories: ["רפואי"], rules: { contextIn: ["בית חולים", "מרפאה"] } },
-  { key: "לחץ דם", label: "לחץ דם", icon: "Gauge", categories: ["רפואי"], rules: { contextIn: ["בית חולים", "מרפאה"] } },
+  // Medical
+  { key: "בדיקה רפואית", label: "בדיקה רפואית", icon: "Stethoscope", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "בדיקת דם", label: "בדיקת דם", icon: "Droplets", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "חום", label: "למדוד חום", icon: "Thermometer", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
+  { key: "לחץ דם", label: "לחץ דם", icon: "Gauge", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
   { key: "תרופה", label: "תרופה", icon: "Pill", categories: ["רפואי"], rules: { ageMax: 130 } },
-  // דתי / תרבותי
+  // Religious / Cultural
   { key: "תפילה", label: "תפילה", icon: "StarOfDavid", categories: ["דת"], rules: { sectorIn: ["חרדי", "דתי", "מוסלמי"], genderNot: "אישה", ageMin: 9 } },
   { key: "ברכה", label: "ברכה", icon: "ScrollText", categories: ["דת"], rules: { sectorIn: ["חרדי", "דתי", "מוסלמי"] } },
   { key: "שבת", label: "שמירת שבת", icon: "MoonStar", categories: ["דת"], rules: { sectorIn: ["חרדי", "דתי"] } },
   { key: "צניעות", label: "צניעות", icon: "Shield", categories: ["דת"], rules: { sectorIn: ["חרדי", "דתי", "מוסלמי"], gender: "אישה", ageMin: 12 } },
-  // גילאי / תפקידים
+  // Age-based / Roles
   { key: "ליווי", label: "אני צריך ליווי", icon: "HandPlatter", categories: ["רגשות ושיתוף"], rules: { ageMin: 65 } },
-  { key: "רופא", label: "רופא/ה", icon: "HeartPulse", categories: ["רפואי"], rules: { contextIn: ["בית חולים", "מרפאה"] } },
+  { key: "רופא", label: "רופא/ה", icon: "HeartPulse", categories: ["רפואי"], rules: { contextIn: ["מחלקה", "טיפול נמרץ"] } },
   { key: "תרומת צדקה", label: "לתת צדקה", icon: "HandCoins", categories: ["דת"], rules: { sectorIn: ["חרדי", "דתי", "מוסלמי"] } },
   { key: "סיגריה", label: "סיגריה", icon: "Cigarette", categories: ["יומיומי"], rules: { ageMin: 18, ageMax: 130 } },
-  // ילדים / נוער
+  // Children / Youth
   { key: "הורה", label: "אבא/אמא", icon: "PersonStanding", categories: ["רגשות ושיתוף"], rules: { ageMax: 18 } },
   { key: "ללמוד", label: "ללמוד", icon: "BookOpen", categories: ["יומיומי"], rules: { ageMin: 6, ageMax: 18 } },
   { key: "חדר כושר", label: "להתאמן", icon: "Activity", categories: ["יומיומי"], rules: { ageMin: 13 } },
-  // ארוחות
+  // Meals
   { key: "ארוחת בוקר", label: "ארוחת בוקר", icon: "Coffee", categories: ["צרכים בסיסיים"], rules: {} },
   { key: "לחם", label: "לחם", icon: "Wheat", categories: ["צרכים בסיסיים"], rules: {} },
+  // Head injury / Medical communication
+  { key: "כואב לי", label: "כואב לי", icon: "Zap", categories: ["רפואי", "צרכים בסיסיים"], rules: {} },
+  { key: "כואב הראש", label: "כואב הראש", icon: "Brain", categories: ["רפואי"], rules: {} },
+  { key: "סחרחורת", label: "סחרחורת", icon: "RotateCcw", categories: ["רפואי"], rules: {} },
+  { key: "בחילה", label: "בחילה", icon: "Frown", categories: ["רפואי"], rules: {} },
+  { key: "עייף מאוד", label: "עייף מאוד", icon: "Moon", categories: ["צרכים בסיסיים"], rules: {} },
+  { key: "לא מבין", label: "לא מבין", icon: "HelpCircle", categories: ["רגשות ושיתוף"], rules: {} },
+  { key: "כן", label: "כן", icon: "Check", categories: ["רגשות ושיתוף"], rules: {} },
+  { key: "לא", label: "לא", icon: "X", categories: ["רגשות ושיתוף"], rules: {} },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                     טעינת נתונים חיצוניים (אופציונלי)
-//  אם רוצים להזין JSON חיצוני, הנח את הקבצים ב-public: /category_styles.json ו-/tile_library.json
-//  כאן אנו משתמשים ב-fetch בזמן ריצה; אם 404/שגיאה—נשארים עם ברירת המחדל. אין dynamic import.
-//  כמו כן, אם window.__BOARD_DATA__ קיים – יקבל עדיפות.
+//                     External data loading (optional)
+//  If you want to provide external JSON, place the files in public: /category_styles.json and /tile_library.json
+//  Here we use fetch at runtime; if 404/error—we stay with the default. No dynamic import.
+//  Also, if window.__BOARD_DATA__ exists – it gets priority.
 // ──────────────────────────────────────────────────────────────────────────────
 
 function useDataLoader() {
@@ -102,7 +111,7 @@ function useDataLoader() {
   const [tileLibrary, setTileLibrary] = useState<TileItem[]>(TILE_LIBRARY_DEFAULT);
 
   useEffect(() => {
-    // 1) נתונים שמוזרמים דרך חלון
+    // 1) Data streamed through window
     const winData = (typeof window !== "undefined" && (window as any).__BOARD_DATA__) || null;
     if (winData?.categoryStyles && typeof winData.categoryStyles === "object") {
       setCategoryStyles(winData.categoryStyles);
@@ -111,7 +120,7 @@ function useDataLoader() {
       setTileLibrary(winData.tileLibrary);
     }
 
-    // 2) ניסיון לקרוא JSON סטטי מתוך /public
+    // 2) Attempt to read static JSON from /public
     const tryFetchJson = async (url: string) => {
       try {
         const res = await fetch(url, { cache: "no-store" });
@@ -134,7 +143,7 @@ function useDataLoader() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                            לוגיקת יצירת הלוח
+//                            Board generation logic
 // ──────────────────────────────────────────────────────────────────────────────
 
 function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], categoryOrder: string[], selectedCategory?: string) {
@@ -153,7 +162,7 @@ function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], 
     return true;
   });
 
-  // קיבוץ לפי קטגוריה
+  // Group by category
   const byCat: Record<string, TileItem[]> = {};
   for (const tile of allowed) {
     for (const c of tile.categories) {
@@ -161,7 +170,7 @@ function computeTiles(profile: Profile, limit: number, tileLibrary: TileItem[], 
     }
   }
 
-  // איזון בין קטגוריות + דטרמיניזם
+  // Balance between categories + determinism
   const result: TileItem[] = [];
   const picked = new Set<string>();
   let safety = 0;
@@ -199,7 +208,7 @@ function useGeneratedTiles(profile: Profile, limit: number, tileLibrary: TileIte
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                                UI
+//                                UI Components
 // ──────────────────────────────────────────────────────────────────────────────
 
 function Tile({ item, categoryStyles }: { item: TileItem; categoryStyles: Record<string, string> }) {
@@ -228,7 +237,7 @@ function Legend({ categoryStyles }: { categoryStyles: Record<string, string> }) 
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                                בדיקות (Diagnostics)
+//                                Diagnostics
 // ──────────────────────────────────────────────────────────────────────────────
 
 function Diagnostics({ tileLibrary, categoryStyles }: { tileLibrary: TileItem[]; categoryStyles: Record<string, string> }) {
@@ -236,7 +245,7 @@ function Diagnostics({ tileLibrary, categoryStyles }: { tileLibrary: TileItem[];
   const missingIcons = iconNames.filter((n) => !(n in (Lucide as any)));
   const missingCategories = tileLibrary.flatMap((t) => t.categories).filter((c) => !categoryStyles[c]);
 
-  // פרופילים לדוגמה (קיימים)
+  // Sample profiles (existing)
   const PRESETS = {
     "נער חרדי": { age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" } as Profile,
     "גבר בן 70": { age: 70, gender: "גבר", sector: "חילוני", context: "מחלקה" } as Profile,
@@ -253,20 +262,20 @@ function Diagnostics({ tileLibrary, categoryStyles }: { tileLibrary: TileItem[];
     }
   });
 
-  // ✅ בדיקות נוספות (מוסיפות, לא משנות את הקיימות)
+  // ✅ Additional tests (additive, don't change existing ones)
   const hasTile = (key: string, arr: TileItem[]) => arr.some((t) => t.key === key);
 
-  // גיל סף: "חדר כושר" ageMin 13
+  // Age threshold: "gym" ageMin 13
   const tilesAge12 = computeTiles({ age: 12, gender: "בן", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
   const tilesAge13 = computeTiles({ age: 13, gender: "בן", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
   const ageBoundaryOk = !hasTile("חדר כושר", tilesAge12) && hasTile("חדר כושר", tilesAge13);
 
-  // הקשר: פריטי רפואה דורשים מרפאה/בית חולים
+  // Context: medical items require ward/intensive care
   const tilesHome = computeTiles({ age: 30, gender: "גבר", sector: "חילוני", context: "בית" }, 24, tileLibrary, Object.keys(categoryStyles));
-  const tilesClinic = computeTiles({ age: 30, gender: "גבר", sector: "חילוני", context: "מרפאה" }, 24, tileLibrary, Object.keys(categoryStyles));
+  const tilesClinic = computeTiles({ age: 30, gender: "גבר", sector: "חילוני", context: "מחלקה" }, 24, tileLibrary, Object.keys(categoryStyles));
   const contextFilterOk = !hasTile("בדיקה רפואית", tilesHome) && hasTile("בדיקה רפואית", tilesClinic);
 
-  // מגזר: שבת לא אמורה להופיע למוסלמי
+  // Sector: Sabbath should not appear for Muslim
   const tilesMuslim = computeTiles(PRESETS["נער מוסלמי דתי"], 24, tileLibrary, Object.keys(categoryStyles));
   const sectorExclusionOk = !hasTile("שבת", tilesMuslim);
 
@@ -286,7 +295,7 @@ function Diagnostics({ tileLibrary, categoryStyles }: { tileLibrary: TileItem[];
         <div className="mt-4 font-medium">בדיקות נוספות</div>
         <ul className="list-disc pr-4 space-y-1">
           <li>בדיקת גיל סף (12/13) ל"חדר כושר": {ageBoundaryOk ? "עובר" : "נכשל"}</li>
-          <li>סינון לפי הקשר (בית/מרפאה) ל"בדיקה רפואית": {contextFilterOk ? "עובר" : "נכשל"}</li>
+          <li>סינון לפי הקשר (בית/מחלקה) ל"בדיקה רפואית": {contextFilterOk ? "עובר" : "נכשל"}</li>
           <li>אי הכללת "שבת" לפרופיל מוסלמי: {sectorExclusionOk ? "עובר" : "נכשל"}</li>
         </ul>
       </CardContent>
@@ -309,11 +318,11 @@ function A4Frame({ children, title, categoryStyles }: { children: React.ReactNod
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-//                            קומפוננטת הדמו
+//                            Demo Component
 // ──────────────────────────────────────────────────────────────────────────────
 
 export default function CommunicationBoardDemo() {
-  const [preset, setPreset] = useState<"נער חרדי" | "גבר בן 70" | "נער מוסלמי דתי" | "מותאם">("נער חרדי");
+  const [preset, setPreset] = useState<"נער חרדי" | "גבר בן 70" | "נער מוסלמי דתי" | "פגיעת ראש 3-6" | "פגיעת ראש 7+" | "בדיקה רפואית 7+" | "מותאם">("נער חרדי");
   const [profile, setProfile] = useState<Profile>({ age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" });
   const [limit, setLimit] = useState(16);
   const [selectedCategory, setSelectedCategory] = useState<string>("הכל");
@@ -328,6 +337,9 @@ export default function CommunicationBoardDemo() {
     if (p === "נער חרדי") setProfile({ age: 15, gender: "בן", sector: "חרדי", context: "מחלקה" });
     else if (p === "גבר בן 70") setProfile({ age: 70, gender: "גבר", sector: "חילוני", context: "מחלקה" });
     else if (p === "נער מוסלמי דתי") setProfile({ age: 15, gender: "בן", sector: "מוסלמי", context: "מחלקה" });
+    else if (p === "פגיעת ראש 3-6") setProfile({ age: 4, gender: "בן", sector: "חילוני", context: "טיפול נמרץ" });
+    else if (p === "פגיעת ראש 7+") setProfile({ age: 10, gender: "בן", sector: "חילוני", context: "טיפול נמרץ" });
+    else if (p === "בדיקה רפואית 7+") setProfile({ age: 10, gender: "בן", sector: "חילוני", context: "מחלקה" });
   };
 
   const downloadPNG = async () => {
@@ -348,7 +360,7 @@ export default function CommunicationBoardDemo() {
           <div className="space-y-1">
             <label className="text-sm">פרופיל מהיר</label>
             <select className="w-full border rounded-md p-2" value={preset} onChange={(e) => onPreset(e.target.value as any)}>
-              {(["נער חרדי", "גבר בן 70", "נער מוסלמי דתי", "מותאם"] as const).map((k) => (
+              {(["נער חרדי", "גבר בן 70", "נער מוסלמי דתי", "פגיעת ראש 3-6", "פגיעת ראש 7+", "בדיקה רפואית 7+", "מותאם"] as const).map((k) => (
                 <option key={k} value={k}>
                   {k}
                 </option>
@@ -427,7 +439,7 @@ export default function CommunicationBoardDemo() {
                 setProfile({ ...profile, context: e.target.value });
               }}
             >
-              {["מחלקה", "בית", "בית חולים", "מרפאה"].map((c) => (
+              {["מחלקה", "טיפול נמרץ", "בית"].map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
