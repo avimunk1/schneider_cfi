@@ -30,6 +30,18 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+# API Keys and Service Account Credentials
+vertex-ai-credentials.json
+vertixai-400510-31a15c064ece.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.node.json
+!tailwind.config.js
+!postcss.config.js
+!public/category_styles.json
+
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov

@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import * as Lucide from "lucide-react"; // Centralized import + smart fallback
 import * as htmlToImage from "html-to-image";
+import { generateImage, parseImageRequests, GeneratedImage } from "@/lib/gemini";
 
 // ──────────────────────────────────────────────────────────────────────────────
 //                               Types
@@ -289,6 +290,16 @@ export default function CommunicationBoardDemo() {
   const [aiDescription, setAiDescription] = useState("תכין לי לוח לילדה בת 5 המאושפזת בטיפול נמרץ שיכלול תמונות בנושאים הבאים:\nכואב לי ; קר לי ; שמיכה\nאחות ; גבס ; מגרד ; שורף\nאמא ; מפחד");
   const [isGenerating, setIsGenerating] = useState(false);
   const [agentStep, setAgentStep] = useState("");
+  
+  // Image generation states
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageRequests, setImageRequests] = useState("");
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [selectedImages, setSelectedImages] = useState<GeneratedImage[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [imageGenerationStep, setImageGenerationStep] = useState("");
+  
   const boardRef = useRef<HTMLDivElement>(null);
 
   const { categoryStyles, tileLibrary } = useDataLoader();
@@ -413,6 +424,113 @@ export default function CommunicationBoardDemo() {
       tileCount,
       category
     };
+  };
+
+  // Image generation functions
+  const startImageGeneration = async () => {
+    if (!imageRequests.trim()) return;
+    
+    setIsGeneratingImages(true);
+    setGeneratedImages([]);
+    setSelectedImages([]);
+    setCurrentImageIndex(0);
+    
+    try {
+      const requests = parseImageRequests(imageRequests);
+      setImageGenerationStep(`מתחיל ליצור ${requests.length} תמונות...`);
+      
+      const images: GeneratedImage[] = [];
+      
+      for (let i = 0; i < requests.length; i++) {
+        const request = requests[i];
+        setImageGenerationStep(`יוצר תמונה ${i + 1} מתוך ${requests.length}: ${request}`);
+        
+        const generatedImage = await generateImage({ prompt: request });
+        images.push(generatedImage);
+        setGeneratedImages([...images]);
+        
+        // Small delay between generations
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      setImageGenerationStep("הושלמה יצירת כל התמונות!");
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (error) {
+      console.error("Error generating images:", error);
+      setImageGenerationStep("שגיאה ביצירת התמונות");
+    } finally {
+      setIsGeneratingImages(false);
+      setImageGenerationStep("");
+    }
+  };
+
+  const handleImageFeedback = async (image: GeneratedImage, action: 'use' | 'retry' | 'improve', improvementPrompt?: string) => {
+    if (action === 'use') {
+      setSelectedImages(prev => [...prev, image]);
+      // Move to next image or finish
+      if (currentImageIndex < generatedImages.length - 1) {
+        setCurrentImageIndex(prev => prev + 1);
+      }
+    } else if (action === 'retry') {
+      setIsGeneratingImages(true);
+      setImageGenerationStep(`יוצר מחדש: ${image.prompt}`);
+      
+      try {
+        const newImage = await generateImage({ prompt: image.prompt });
+        const updatedImages = [...generatedImages];
+        updatedImages[currentImageIndex] = newImage;
+        setGeneratedImages(updatedImages);
+      } catch (error) {
+        console.error("Error regenerating image:", error);
+        setImageGenerationStep("שגיאה ביצירת התמונה מחדש");
+      } finally {
+        setIsGeneratingImages(false);
+        setImageGenerationStep("");
+      }
+    } else if (action === 'improve' && improvementPrompt) {
+      setIsGeneratingImages(true);
+      setImageGenerationStep(`משפר תמונה: ${image.prompt}`);
+      
+      try {
+        const enhancedPrompt = `${image.prompt} - ${improvementPrompt}`;
+        const newImage = await generateImage({ 
+          prompt: enhancedPrompt,
+          originalPrompt: image.prompt 
+        });
+        const updatedImages = [...generatedImages];
+        updatedImages[currentImageIndex] = newImage;
+        setGeneratedImages(updatedImages);
+      } catch (error) {
+        console.error("Error improving image:", error);
+        setImageGenerationStep("שגיאה בשיפור התמונה");
+      } finally {
+        setIsGeneratingImages(false);
+        setImageGenerationStep("");
+      }
+    }
+  };
+
+  const createBoardFromImages = () => {
+    // Convert selected images to tiles and add them to the current board
+    const newTiles: TileItem[] = selectedImages.map((img) => ({
+      key: `custom_${img.id}`,
+      label: img.prompt,
+      icon: 'Image', // Use a generic image icon
+      categories: ['מותאם אישית'],
+      customImage: img.imageUrl
+    }));
+    
+    // For now, we'll just close the modal and show the selected images
+    // In a full implementation, you'd integrate these into the tile system
+    setShowImageModal(false);
+    setImageRequests("");
+    setGeneratedImages([]);
+    setSelectedImages([]);
+    setCurrentImageIndex(0);
+    
+    // You could extend the tile system to support custom images
+    console.log('Created board with custom images:', newTiles);
   };
 
   return (
@@ -549,6 +667,19 @@ export default function CommunicationBoardDemo() {
               <span style={{ color: 'white' }}>יצירת לוח חכם</span>
             </button>
             <button 
+              onClick={() => setShowImageModal(true)} 
+              className="px-4 py-2 rounded-md font-medium flex items-center gap-2"
+              style={{ 
+                backgroundColor: '#10b981', 
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Lucide.ImagePlus className="w-4 h-4" style={{ color: 'white' }} /> 
+              <span style={{ color: 'white' }}>צור תמונות</span>
+            </button>
+            <button 
               onClick={downloadPNG} 
               className="px-4 py-2 rounded-md font-medium flex items-center gap-2"
               style={{ 
@@ -672,6 +803,218 @@ export default function CommunicationBoardDemo() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Image Generation Modal */}
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <CardContent className="p-6">
+              <div className="mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Lucide.ImagePlus className="w-5 h-5 text-green-600" />
+                  יצירת תמונות מותאמות אישית
+                </h3>
+              </div>
+              
+              {/* Input Phase */}
+              {generatedImages.length === 0 && !isGeneratingImages && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      רשום את התמונות שאתה צריך
+                    </label>
+                    <p className="text-sm text-gray-600 mb-3">
+                      כתוב רשימה של התמונות שתרצה ליצור, מופרדות בפסיקים. לדוגמה: "אבטיח, לימון, זוג גרביים"
+                    </p>
+                    <textarea
+                      className="w-full border rounded-md p-3 h-24 resize-none"
+                      placeholder="אבטיח, לימון, זוג גרביים, כוס מים..."
+                      value={imageRequests}
+                      onChange={(e) => setImageRequests(e.target.value)}
+                      dir="rtl"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => setShowImageModal(false)}
+                      className="px-4 py-2 rounded-md text-white font-medium"
+                      style={{ 
+                        backgroundColor: '#6b7280', 
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      onClick={startImageGeneration}
+                      disabled={!imageRequests.trim()}
+                      className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                      style={{ 
+                        backgroundColor: !imageRequests.trim() ? '#9ca3af' : '#10b981', 
+                        color: 'white',
+                        border: 'none',
+                        cursor: !imageRequests.trim() ? 'not-allowed' : 'pointer',
+                        opacity: !imageRequests.trim() ? '0.6' : '1'
+                      }}
+                    >
+                      <Lucide.Sparkles className="w-4 h-4" style={{ color: 'white' }} />
+                      <span style={{ color: 'white' }}>התחל ליצור תמונות</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Generation Progress */}
+              {isGeneratingImages && imageGenerationStep && (
+                <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                    </div>
+                    <span className="text-green-800 font-medium">{imageGenerationStep}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Image Review Phase */}
+              {generatedImages.length > 0 && !isGeneratingImages && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">
+                      סקור כל תמונה ובחר מה לעשות איתה. תמונה {currentImageIndex + 1} מתוך {generatedImages.length}
+                    </p>
+                  </div>
+
+                  {/* Current Image Display */}
+                  {generatedImages[currentImageIndex] && (
+                    <div className="text-center space-y-4">
+                      <div className="bg-gray-100 rounded-lg p-4">
+                        <h4 className="font-medium mb-2">{generatedImages[currentImageIndex].prompt}</h4>
+                        {generatedImages[currentImageIndex].status === 'completed' ? (
+                          <img 
+                            src={generatedImages[currentImageIndex].imageUrl} 
+                            alt={generatedImages[currentImageIndex].prompt}
+                            className="mx-auto max-w-xs max-h-48 rounded-lg shadow-md"
+                          />
+                        ) : generatedImages[currentImageIndex].status === 'error' ? (
+                          <div className="text-red-600 p-4">
+                            <Lucide.AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                            <p>שגיאה ביצירת התמונה</p>
+                            <p className="text-sm">{generatedImages[currentImageIndex].error}</p>
+                          </div>
+                        ) : (
+                          <div className="text-gray-600 p-4">
+                            <Lucide.Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" />
+                            <p>יוצר תמונה...</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Feedback Buttons */}
+                      {generatedImages[currentImageIndex].status === 'completed' && (
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => handleImageFeedback(generatedImages[currentImageIndex], 'use')}
+                            className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                            style={{ 
+                              backgroundColor: '#10b981', 
+                              color: 'white',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Lucide.Check className="w-4 h-4" style={{ color: 'white' }} />
+                            <span style={{ color: 'white' }}>השתמש בתמונה</span>
+                          </button>
+                          <button
+                            onClick={() => handleImageFeedback(generatedImages[currentImageIndex], 'retry')}
+                            className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                            style={{ 
+                              backgroundColor: '#f59e0b', 
+                              color: 'white',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Lucide.RotateCcw className="w-4 h-4" style={{ color: 'white' }} />
+                            <span style={{ color: 'white' }}>נסה שוב</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const prompt = window.prompt('איך לשפר את התמונה?');
+                              if (prompt) handleImageFeedback(generatedImages[currentImageIndex], 'improve', prompt);
+                            }}
+                            className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                            style={{ 
+                              backgroundColor: '#3b82f6', 
+                              color: 'white',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Lucide.Edit className="w-4 h-4" style={{ color: 'white' }} />
+                            <span style={{ color: 'white' }}>שפר עם הנחיה</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Selected Images Summary */}
+                  {selectedImages.length > 0 && (
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="font-medium mb-2">תמונות שנבחרו ({selectedImages.length}):</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedImages.map((img) => (
+                          <div key={img.id} className="text-sm bg-blue-100 px-2 py-1 rounded">
+                            {img.prompt}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Final Actions */}
+                  {currentImageIndex >= generatedImages.length - 1 && selectedImages.length > 0 && (
+                    <div className="flex gap-3 justify-end mt-6">
+                      <button
+                        onClick={() => setShowImageModal(false)}
+                        className="px-4 py-2 rounded-md text-white font-medium"
+                        style={{ 
+                          backgroundColor: '#6b7280', 
+                          color: 'white',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        onClick={createBoardFromImages}
+                        className="px-4 py-2 rounded-md text-white font-medium flex items-center gap-2"
+                        style={{ 
+                          backgroundColor: '#10b981', 
+                          color: 'white',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Lucide.Layout className="w-4 h-4" style={{ color: 'white' }} />
+                        <span style={{ color: 'white' }}>צור לוח תקשורת</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
