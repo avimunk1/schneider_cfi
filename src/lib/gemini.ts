@@ -43,13 +43,21 @@ export async function generateImage(request: ImageGenerationRequest): Promise<Ge
       apiKey: API_KEY,
     });
 
-    // Create a child-friendly, medical-appropriate prompt tailored to age/gender
-    const enhancedPrompt = `Create a simple, colorful illustration of ${request.prompt} for a ${audience}.
-    Style: clean cartoon, bright colors, simple shapes, suitable for a hospital communication board.
+    // Create a child-friendly or adult-appropriate, medical-appropriate prompt tailored to age/gender
+    const enhancedPrompt = `Create a simple, clear illustration of ${request.prompt} for a ${audience}.
+    Goal: help hospitalized patients who cannot communicate verbally to express themselves through images.
+
+    General instructions:
+    - Create a clear image with one main object based on the user prompt.
+    - For adults (age 15+): use a realistic illustration style.
+    - For children (under 15): use a clean cartoon style with bright colors and simple shapes.
+    - Suitable for a hospital communication board.
+    - Do not include captions or labels; communicate only with imagery.
+
     Background: plain white or very light color.
     Content: clear, recognizable object; friendly; culturally neutral; no scary details.
     ${cultureLine}
-    Safety: no text, no logos, no blood, no needles in skin.`;
+    Safety: absolutely no text (no words, letters, or numbers in any language), no logos, no watermarks, no UI elements, no blood, no needles in skin.`;
 
     console.log('Generating content with Gemini, prompt:', enhancedPrompt);
 
@@ -119,11 +127,11 @@ export async function generateImage(request: ImageGenerationRequest): Promise<Ge
           const textAI = new GoogleGenAI({ apiKey: API_KEY });
           const textPrompt = `Create a detailed, child-friendly description for generating an image of: ${request.prompt}.
           Audience: ${audience}${sectorEn ? `, ${sectorEn}` : ''}.
-          Style: clean cartoon illustration, bright colors, simple shapes, suitable for a medical communication board.
+          Style: realistic for adults (15+); clean cartoon for children (<15); bright colors and simple shapes for kids.
           Background: plain white or very light color.
-          Content: clear, recognizable object a child easily understands.
+          Content: clear, recognizable object that is friendly and culturally neutral.
           ${cultureLine}
-          Safety: no text in the image.`;
+          Safety: absolutely no text (no words, letters, or numbers), no logos, no watermarks, no blood, no needles in skin.`;
           
           const textResult = await textAI.models.generateContent({
             model: 'gemini-2.0-flash-exp',
