@@ -28,6 +28,8 @@ type TileItem = {
   label: string;
   icon: string; // Icon name from lucide or logical mapping key
   categories: string[];
+  // Optional custom image URL for AI-generated tiles
+  customImage?: string;
   rules?: {
     ageMin?: number;
     ageMax?: number;
@@ -242,8 +244,12 @@ function Tile({ item, categoryStyles }: { item: TileItem; categoryStyles: Record
   const cat = item.categories?.[0] || "יומיומי";
   const bg = categoryStyles[cat] || "bg-slate-200";
   return (
-    <div className={`flex flex-col items-center justify-center rounded-2xl p-2 ${bg} shadow-sm`}>
-      <Icon className="w-10 h-10 mb-2" />
+    <div className={`flex flex-col items-center justify-center h-full rounded-2xl p-2 ${item.customImage ? "bg-white" : bg} shadow-sm`}>
+      {item.customImage ? (
+        <img src={item.customImage} alt={item.label} className="w-full max-h-[70%] object-contain mb-2 rounded" />
+      ) : (
+        <Icon className="w-12 h-12 md:w-14 md:h-14 mb-2" />
+      )}
       <div className="text-center text-sm font-medium leading-tight">{item.label}</div>
     </div>
   );
@@ -299,6 +305,8 @@ export default function CommunicationBoardDemo() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [imageGenerationStep, setImageGenerationStep] = useState("");
+  // Custom tiles created from selected images
+  const [customTiles, setCustomTiles] = useState<TileItem[]>([]);
   
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -521,16 +529,18 @@ export default function CommunicationBoardDemo() {
       customImage: img.imageUrl
     }));
     
-    // For now, we'll just close the modal and show the selected images
-    // In a full implementation, you'd integrate these into the tile system
+    // Use these tiles as the active board
+    setCustomTiles(newTiles);
+    setLimit(newTiles.length);
+    setPreset("מותאם");
+    setSelectedCategory("הכל");
+
+    // Close modal and reset image creation state
     setShowImageModal(false);
     setImageRequests("");
     setGeneratedImages([]);
     setSelectedImages([]);
     setCurrentImageIndex(0);
-    
-    // You could extend the tile system to support custom images
-    console.log('Created board with custom images:', newTiles);
   };
 
   return (
@@ -698,11 +708,22 @@ export default function CommunicationBoardDemo() {
 
       <A4Frame title="לוח תקשורת מותאם" categoryStyles={categoryStyles}>
         <div ref={boardRef} className="w-full h-full flex flex-col">
-          <div className="grid grid-cols-4 gap-3 w-full h-full">
-            {tiles.map((t) => (
+          {(() => {
+            const activeTiles = customTiles.length ? customTiles : tiles;
+            const count = activeTiles.length;
+            // Decide grid columns based on item count
+            // 1-4 => 2 cols, 5-8 => 3 cols, 9-16 => 4 cols, 17-24 => 5 cols
+            const cols = count <= 4 ? 2 : count <= 8 ? 3 : count <= 16 ? 4 : 5;
+            // Build a class string for Tailwind grid template columns
+            const colClass = cols === 2 ? 'grid-cols-2' : cols === 3 ? 'grid-cols-3' : cols === 4 ? 'grid-cols-4' : 'grid-cols-5';
+            return (
+              <div className={`grid ${colClass} gap-3 w-full h-full content-start justify-items-stretch place-items-stretch`} style={{ direction: 'rtl' }}>
+                {activeTiles.map((t) => (
               <Tile key={t.key} item={t} categoryStyles={categoryStyles} />
-            ))}
-          </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </A4Frame>
 
