@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Note: In production, this should be stored in environment variables
-const API_KEY = 'AIzaSyDBlssRthSgXuy3qQ_kZCkWEzjNosTtyZA';
+// Vite client-side env var (will be inlined at build time). For demo only.
+const API_KEY = (import.meta as any).env?.VITE_GOOGLE_GENAI_API_KEY || '';
 
 export interface GeneratedImage {
   id: string;
