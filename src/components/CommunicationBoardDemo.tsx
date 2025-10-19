@@ -453,7 +453,7 @@ export default function CommunicationBoardDemo() {
         const request = requests[i];
         setImageGenerationStep(`יוצר תמונה ${i + 1} מתוך ${requests.length}: ${request}`);
         
-        const generatedImage = await generateImage({ prompt: request });
+        const generatedImage = await generateImage({ prompt: request, age: profile.age, gender: profile.gender, sector: profile.sector });
         images.push(generatedImage);
         setGeneratedImages([...images]);
         
@@ -485,7 +485,7 @@ export default function CommunicationBoardDemo() {
       setImageGenerationStep(`יוצר מחדש: ${image.prompt}`);
       
       try {
-        const newImage = await generateImage({ prompt: image.prompt });
+        const newImage = await generateImage({ prompt: image.prompt, age: profile.age, gender: profile.gender, sector: profile.sector });
         const updatedImages = [...generatedImages];
         updatedImages[currentImageIndex] = newImage;
         setGeneratedImages(updatedImages);
@@ -504,7 +504,10 @@ export default function CommunicationBoardDemo() {
         const enhancedPrompt = `${image.prompt} - ${improvementPrompt}`;
         const newImage = await generateImage({ 
           prompt: enhancedPrompt,
-          originalPrompt: image.prompt 
+          originalPrompt: image.prompt,
+          age: profile.age,
+          gender: profile.gender,
+          sector: profile.sector
         });
         const updatedImages = [...generatedImages];
         updatedImages[currentImageIndex] = newImage;
@@ -689,19 +692,6 @@ export default function CommunicationBoardDemo() {
               <Lucide.ImagePlus className="w-4 h-4" style={{ color: 'white' }} /> 
               <span style={{ color: 'white' }}>צור תמונות</span>
             </button>
-            <button 
-              onClick={downloadPNG} 
-              className="px-4 py-2 rounded-md font-medium flex items-center gap-2"
-              style={{ 
-                backgroundColor: '#3b82f6', 
-                color: 'white',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <Lucide.Download className="w-4 h-4" style={{ color: 'white' }} /> 
-              <span style={{ color: 'white' }}>הורדה כ‑PNG</span>
-            </button>
           </div>
         </CardContent>
       </Card>
@@ -726,6 +716,23 @@ export default function CommunicationBoardDemo() {
           })()}
         </div>
       </A4Frame>
+
+      {/* Persistent download button - bottom-left corner */}
+      <div className="fixed left-4 bottom-4 z-50">
+        <button 
+          onClick={downloadPNG} 
+          className="px-4 py-2 rounded-md font-medium flex items-center gap-2 shadow-lg"
+          style={{ 
+            backgroundColor: '#3b82f6', 
+            color: 'white',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          <Lucide.Download className="w-4 h-4" style={{ color: 'white' }} /> 
+          <span style={{ color: 'white' }}>הורדה כ‑PNG</span>
+        </button>
+      </div>
 
       {/* AI Generation Modal */}
       {showAIModal && (

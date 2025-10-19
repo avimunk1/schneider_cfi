@@ -14,6 +14,9 @@ export interface GeneratedImage {
 export interface ImageGenerationRequest {
   prompt: string;
   originalPrompt?: string;
+  age?: number;
+  gender?: string; // Hebrew values: "בן" | "ילדה" | "גבר" | "אישה"
+  sector?: string; // "חרדי" | "דתי" | "מסורתי" | "חילוני" | "מוסלמי"
 }
 
 /**
@@ -24,17 +27,29 @@ export interface ImageGenerationRequest {
 export async function generateImage(request: ImageGenerationRequest): Promise<GeneratedImage> {
   const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
+  // Derive audience description from profile (outside try so it's available in fallbacks)
+  const age = request.age != null ? request.age : undefined;
+  const gender = request.gender || '';
+  const genderEn = gender === 'בן' ? 'boy' : gender === 'ילדה' ? 'girl' : gender === 'גבר' ? 'man' : gender === 'אישה' ? 'woman' : 'child';
+  const audience = age ? `${age}-year-old ${genderEn}` : gender ? `${genderEn}` : 'child';
+
+  // Cultural/religious context
+  const sector = request.sector || '';
+  const sectorEn = sector === 'מוסלמי' ? 'Muslim' : sector === 'חרדי' ? 'ultra-Orthodox Jewish' : sector === 'דתי' ? 'religious Jewish' : sector === 'מסורתי' ? 'traditional Jewish' : sector === 'חילוני' ? 'secular' : '';
+  const cultureLine = sectorEn ? `Cultural context: appropriate for a ${sectorEn} audience; avoid offensive or inappropriate religious imagery.` : '';
+
   try {
     const ai = new GoogleGenAI({
       apiKey: API_KEY,
     });
 
-    // Create a child-friendly, medical-appropriate prompt
-    const enhancedPrompt = `Create a simple, colorful, child-friendly illustration of ${request.prompt}. 
-    Style: Clean cartoon illustration, bright colors, simple shapes, suitable for medical communication board.
-    Background: Plain white or light colored background.
-    Content: Clear, recognizable object that a child would easily understand.
-    No text in the image.`;
+    // Create a child-friendly, medical-appropriate prompt tailored to age/gender
+    const enhancedPrompt = `Create a simple, colorful illustration of ${request.prompt} for a ${audience}.
+    Style: clean cartoon, bright colors, simple shapes, suitable for a hospital communication board.
+    Background: plain white or very light color.
+    Content: clear, recognizable object; friendly; culturally neutral; no scary details.
+    ${cultureLine}
+    Safety: no text, no logos, no blood, no needles in skin.`;
 
     console.log('Generating content with Gemini, prompt:', enhancedPrompt);
 
@@ -102,11 +117,13 @@ export async function generateImage(request: ImageGenerationRequest): Promise<Ge
         // Try to get enhanced description using text generation first
         try {
           const textAI = new GoogleGenAI({ apiKey: API_KEY });
-          const textPrompt = `Create a detailed, child-friendly description for generating an image of: ${request.prompt}. 
-          Style: Clean cartoon illustration, bright colors, simple shapes, suitable for medical communication board.
-          Background: Plain white or light colored background.
-          Content: Clear, recognizable object that a child would easily understand.
-          No text in the image.`;
+          const textPrompt = `Create a detailed, child-friendly description for generating an image of: ${request.prompt}.
+          Audience: ${audience}${sectorEn ? `, ${sectorEn}` : ''}.
+          Style: clean cartoon illustration, bright colors, simple shapes, suitable for a medical communication board.
+          Background: plain white or very light color.
+          Content: clear, recognizable object a child easily understands.
+          ${cultureLine}
+          Safety: no text in the image.`;
           
           const textResult = await textAI.models.generateContent({
             model: 'gemini-2.0-flash-exp',
