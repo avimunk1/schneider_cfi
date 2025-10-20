@@ -1,44 +1,63 @@
-# לוח תקשורת מותאם אישית - Schneider CFI
+# Schneider CFI – Personalized Communication Board
 
-דמו אינטראקטיבי ללוח תקשורת מותאם אישית המתאים לצרכים תרבותיים ודתיים שונים.
+Interactive demo for a culturally aware communication board that adapts to patient profile and hospital context.
 
-## תכונות
+## Features
 
-- **התאמה אישית**: מותאם לגיל, מגדר, מגזר והקשר
-- **תמיכה תרבותית**: כולל התאמות לקהילות חרדיות, דתיות ומוסלמיות
-- **ממשק בעברית**: תמיכה מלאה בכתיבה מימין לשמאל
-- **יצוא PNG**: אפשרות להורדת הלוח כתמונה
-- **קונפיגורציה חיצונית**: תמיכה בקבצי JSON חיצוניים
+- **Profile-aware tiles**: adapts to age, gender, sector (religion/culture) and context
+- **Cultural support**: respectful for Haredi, Religious, Muslim, Traditional, Secular
+- **AI image generation**: create custom images with prompts tailored by age/gender/sector
+- **Dynamic A4 layout**: auto‑sized tiles; fills from top‑right for RTL layouts
+- **Always‑available export**: persistent bottom‑left “Download PNG” button
+- **External configuration**: optional JSON data in `public/`
 
-## הרצה מקומית
+## Local development
 
-1. התקן תלויות:
+1) Install dependencies
 ```bash
 npm install
 ```
 
-2. הרץ את שרת הפיתוח:
+2) Configure environment (demo client‑side key)
+Create a `.env` file in the project root:
+```bash
+VITE_GOOGLE_GENAI_API_KEY=YOUR_GOOGLE_AI_STUDIO_API_KEY
+```
+
+3) Run the dev server
 ```bash
 npm run dev
 ```
+Open `http://localhost:5173`.
 
-3. פתח בדפדפן: http://localhost:5173
+## Deployment (Vercel)
 
-## מבנה הפרויקט
+1) In Vercel → Project → Settings → Environment Variables:
+   - Name: `VITE_GOOGLE_GENAI_API_KEY`
+   - Value: your Google AI Studio API key
+   - Scope: Preview + Production
 
-- `src/components/CommunicationBoardDemo.tsx` - הקומפוננטה הראשית
-- `src/components/ui/` - קומפוננטות UI בסיסיות
-- `public/category_styles.json` - הגדרות צבעים לקטגוריות (אופציונלי)
-- `public/tile_library.json` - ספריית אריחים (אופציונלי)
+2) Redeploy the project. Vite will inline the value at build time. For production, consider moving AI calls to a serverless function to keep secrets off the client.
 
-## קונפיגורציה
+## Project structure
 
-ניתן להתאים את האריחים והקטגוריות על ידי עריכת הקבצים ב-`public/` או על ידי הזנת נתונים דרך `window.__BOARD_DATA__`.
+- `src/components/CommunicationBoardDemo.tsx` – main component and UI
+- `src/lib/gemini.ts` – AI image generation utilities and prompt construction
+- `src/components/ui/` – small UI primitives
+- `public/category_styles.json` – category colors (optional)
+- `public/tile_library.json` – tile library (optional)
 
-## טכנולוגיות
+## Prompting policy (images)
+
+Image prompts are automatically augmented with:
+- Audience: derived from age and gender (e.g., “10‑year‑old boy/girl/man/woman”)
+- Cultural line: adapted to sector (e.g., Muslim / religious Jewish / secular)
+- Safety and clarity: single main object, friendly visuals, no text/letters/numbers, no logos/watermarks, no gore, no needles in skin
+
+## Tech stack
 
 - React 18 + TypeScript
 - Vite
 - Tailwind CSS
-- Lucide React (אייקונים)
-- html-to-image (יצוא PNG)
+- Lucide React (icons)
+- html-to-image (PNG export)
