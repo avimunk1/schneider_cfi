@@ -7,6 +7,7 @@
 //    it's better not to rely on dynamic import. Here we use soft fetch at runtime with fallback to Defaults.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import * as Lucide from "lucide-react"; // Centralized import + smart fallback
 import * as htmlToImage from "html-to-image";
@@ -564,6 +565,20 @@ export default function CommunicationBoardDemo() {
             <h1 className="text-3xl font-bold">לוח תקשורת מותאם אישית</h1>
             <p className="text-sm text-gray-600">מרכז שניידר לרפואת ילדים</p>
           </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/new"
+            className="px-4 py-2 rounded-md font-medium"
+            style={{ 
+              backgroundColor: '#9333ea', 
+              color: 'white',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            מצב סוכן חדש
+          </Link>
         </div>
       </div>
 
