@@ -5,6 +5,8 @@ from typing import List, Dict, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A5
+from bidi.algorithm import get_display
+import arabic_reshaper
 
 
 def _grid_for_layout(layout: str) -> Tuple[int, int]:
@@ -16,10 +18,60 @@ def _grid_for_layout(layout: str) -> Tuple[int, int]:
 
 
 def _safe_font(size: int):
-    try:
-        return ImageFont.truetype("DejaVuSans.ttf", size)
-    except Exception:
-        return ImageFont.load_default()
+    """Load a font that supports Hebrew characters"""
+    # Try Hebrew-compatible fonts in order of preference
+    font_options = [
+        # macOS fonts
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/Arial.ttf",
+        # Linux fonts
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        # Noto Sans (good Hebrew support)
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "Arial.ttf",
+        "DejaVuSans.ttf",
+    ]
+    
+    for font_path in font_options:
+        try:
+            font = ImageFont.truetype(font_path, size)
+            print(f"[render] Loaded font: {font_path}")
+            return font
+        except (OSError, IOError):
+            continue
+    
+    # Fallback to default (may not support Hebrew)
+    print(f"[render] Warning: Could not load Hebrew-compatible font, using default")
+    return ImageFont.load_default()
+
+
+def _prepare_text_for_display(text: str) -> str:
+    """Prepare text for display, handling RTL languages like Hebrew and Arabic"""
+    if not text:
+        return text
+    
+    # Check if text contains Hebrew or Arabic characters
+    has_hebrew = any('\u0590' <= c <= '\u05FF' for c in text)
+    has_arabic = any('\u0600' <= c <= '\u06FF' for c in text)
+    
+    if has_hebrew or has_arabic:
+        # For Hebrew/Arabic, we need to reverse the text for PIL rendering
+        # PIL doesn't natively support RTL, so we reverse the string
+        # This works because Hebrew/Arabic fonts render characters correctly
+        # when displayed in reversed order
+        try:
+            # Reshape Arabic (connects letters properly)
+            reshaped = arabic_reshaper.reshape(text)
+            # Apply bidi algorithm
+            return get_display(reshaped)
+        except Exception as e:
+            # Fallback: simple reversal for pure Hebrew
+            print(f"[render] BiDi processing failed: {e}, using simple reversal")
+            return text[::-1]
+    
+    return text
 
 
 def render_board(
@@ -42,10 +94,11 @@ def render_board(
     font_title = _safe_font(40)
     font_label = _safe_font(22)
 
-    # Title
-    tb = draw.textbbox((0, 0), title, font=font_title)
+    # Title (prepare for RTL if needed)
+    display_title = _prepare_text_for_display(title)
+    tb = draw.textbbox((0, 0), display_title, font=font_title)
     tw, th = tb[2] - tb[0], tb[3] - tb[1]
-    draw.text(((width - tw) / 2, margin / 2), title, fill=(20, 20, 20), font=font_title)
+    draw.text(((width - tw) / 2, margin / 2), display_title, fill=(20, 20, 20), font=font_title)
 
     # Place cells
     assets = Path(assets_dir)
@@ -79,14 +132,17 @@ def render_board(
         line1 = labels.get(langs[0], entity)
         line2 = labels.get(langs[1], "") if len(langs) > 1 else ""
 
-        lb1 = draw.textbbox((0, 0), line1, font=font_label)
+        # Prepare text for RTL display
+        display_line1 = _prepare_text_for_display(line1)
+        lb1 = draw.textbbox((0, 0), display_line1, font=font_label)
         lw1, lh1 = lb1[2] - lb1[0], lb1[3] - lb1[1]
-        draw.text((x + (cell_w - lw1) / 2, y + cell_h - 45), line1, fill=(30, 30, 30), font=font_label)
+        draw.text((x + (cell_w - lw1) / 2, y + cell_h - 45), display_line1, fill=(30, 30, 30), font=font_label)
 
         if line2:
-            lb2 = draw.textbbox((0, 0), line2, font=font_label)
+            display_line2 = _prepare_text_for_display(line2)
+            lb2 = draw.textbbox((0, 0), display_line2, font=font_label)
             lw2, _ = lb2[2] - lb2[0], lb2[3] - lb2[1]
-            draw.text((x + (cell_w - lw2) / 2, y + cell_h - 22), line2, fill=(60, 60, 60), font=font_label)
+            draw.text((x + (cell_w - lw2) / 2, y + cell_h - 22), display_line2, fill=(60, 60, 60), font=font_label)
 
     # Save PNG
     png_name = f"board_{uuid.uuid4().hex[:8]}.png"

@@ -1,6 +1,9 @@
 import os
 import time
+import uuid
+import threading
 from pathlib import Path
+from typing import Dict
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +15,9 @@ from . import orchestrator
 BASE_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+# In-memory progress store (use Redis for production)
+_generation_status: Dict[str, schemas.GenerationProgress] = {}
 
 app = FastAPI(title="Schneider CFI Backend", version="0.1.0")
 
@@ -46,7 +52,6 @@ def api_preview(req: schemas.PreviewRequest):
 
 @app.post("/api/boards/generate", response_model=schemas.GenerateResponse)
 def api_generate(req: schemas.GenerateRequest):
-    import uuid
     request_id = uuid.uuid4().hex[:8]
     try:
         print(f"[generate] request_id={request_id}")
@@ -54,5 +59,63 @@ def api_generate(req: schemas.GenerateRequest):
     except Exception as e:
         print(f"[generate] request_id={request_id} error={e}")
         raise HTTPException(status_code=400, detail={"message": str(e), "request_id": request_id})
+
+
+@app.post("/api/boards/generate/start", response_model=schemas.GenerateStartResponse)
+def api_generate_start(req: schemas.GenerateRequest):
+    """Start async generation and return job_id"""
+    job_id = uuid.uuid4().hex[:8]
+    
+    # Initialize progress
+    _generation_status[job_id] = schemas.GenerationProgress(
+        status="in_progress",
+        completed_count=0,
+        total_count=len(req.parsed.entities),
+        message="מתחיל ליצור תמונות..."
+    )
+    
+    # Run in background thread
+    def _run():
+        try:
+            result = orchestrator.handle_generate(req, str(ASSETS_DIR), job_id)
+            _generation_status[job_id].status = "completed"
+            _generation_status[job_id].message = "הלוח מוכן!"
+            # Store assets in progress object
+            if job_id in _generation_status:
+                _generation_status[job_id] = schemas.GenerationProgress(
+                    status="completed",
+                    completed_count=_generation_status[job_id].total_count,
+                    total_count=_generation_status[job_id].total_count,
+                    message="הלוח מוכן!",
+                    current_entity=None
+                )
+                # We'll need to store assets separately
+                _generation_status[f"{job_id}_assets"] = result.assets
+        except Exception as e:
+            import traceback
+            print(f"[generate_async] job_id={job_id} error={e}")
+            print(f"[generate_async] traceback:\n{traceback.format_exc()}")
+            if job_id in _generation_status:
+                _generation_status[job_id].status = "error"
+                _generation_status[job_id].message = f"שגיאה: {str(e)}"
+    
+    threading.Thread(target=_run, daemon=True).start()
+    return schemas.GenerateStartResponse(job_id=job_id)
+
+
+@app.get("/api/boards/generate/status/{job_id}", response_model=schemas.ProgressResponse)
+def api_generate_status(job_id: str):
+    """Poll generation progress"""
+    if job_id not in _generation_status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    progress = _generation_status[job_id]
+    assets = None
+    
+    # Check if assets are available
+    if progress.status == "completed" and f"{job_id}_assets" in _generation_status:
+        assets = _generation_status[f"{job_id}_assets"]
+    
+    return schemas.ProgressResponse(progress=progress, assets=assets)
 
 

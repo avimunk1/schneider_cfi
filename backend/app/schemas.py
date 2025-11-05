@@ -8,6 +8,8 @@ class PatientProfile(BaseModel):
     language: Optional[str] = None
     can_read: Optional[bool] = None
     second_language: Optional[str] = None
+    religion: Optional[str] = None  # דתי/לא דתי
+    sector: Optional[str] = None  # חילוני/מסורתי/דתי/חרדי/מוסלמי/נוצרי/דרוזי
 
 
 class Preferences(BaseModel):
@@ -16,10 +18,16 @@ class Preferences(BaseModel):
     second_language: Optional[str] = None
 
 
+class ConversationMessage(BaseModel):
+    role: str  # "user" | "agent"
+    text: str
+
+
 class PreviewRequest(BaseModel):
     patient_profile: PatientProfile
     board_description: str
     preferences: Optional[Preferences] = None
+    conversation_history: List[ConversationMessage] = Field(default_factory=list)
 
 
 class ParsedBoard(BaseModel):
@@ -31,6 +39,12 @@ class ParsedBoard(BaseModel):
 class PreviewProfile(BaseModel):
     labels_languages: List[str]
     image_style: str  # e.g., "realistic_explicit" | "cartoon_clean"
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    language: Optional[str] = None
+    can_read: Optional[bool] = None
+    religion: Optional[str] = None
+    sector: Optional[str] = None
 
 
 class Checks(BaseModel):
@@ -48,11 +62,18 @@ class PreviewResponse(BaseModel):
 class GenerateParsed(BaseModel):
     layout: str
     entities: List[str]
+    topic: Optional[str] = None
 
 
 class GenerateProfile(BaseModel):
     labels_languages: List[str]
     image_style: str
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    language: Optional[str] = None
+    can_read: Optional[bool] = None
+    religion: Optional[str] = None
+    sector: Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -64,6 +85,7 @@ class GenerateRequest(BaseModel):
 class Assets(BaseModel):
     png_url: str
     pdf_url: str
+    image_files: Optional[List[str]] = None  # List of individual image filenames
 
 
 class Timings(BaseModel):
@@ -74,5 +96,22 @@ class Timings(BaseModel):
 class GenerateResponse(BaseModel):
     assets: Assets
     timings_ms: Timings
+
+
+class GenerationProgress(BaseModel):
+    status: str  # "in_progress" | "completed" | "error"
+    current_entity: Optional[str] = None
+    completed_count: int = 0
+    total_count: int = 0
+    message: str  # User-facing message in their language
+
+
+class ProgressResponse(BaseModel):
+    progress: GenerationProgress
+    assets: Optional[Assets] = None  # Only present when status="completed"
+
+
+class GenerateStartResponse(BaseModel):
+    job_id: str
 
 

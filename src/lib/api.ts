@@ -1,3 +1,8 @@
+export type ConversationMessage = {
+  role: string;
+  text: string;
+};
+
 export type PreviewRequest = {
   patient_profile: {
     age?: number;
@@ -12,6 +17,7 @@ export type PreviewRequest = {
     paper_size?: string;
     second_language?: string;
   };
+  conversation_history?: ConversationMessage[];
 };
 
 export type PreviewResponse = {
@@ -22,7 +28,7 @@ export type PreviewResponse = {
 };
 
 export type GenerateRequest = {
-  parsed: { layout: string; entities: string[] };
+  parsed: { layout: string; entities: string[]; topic?: string };
   profile: { labels_languages: string[]; image_style: string };
   title: string;
 };
@@ -32,14 +38,34 @@ export type GenerateResponse = {
   timings_ms: { images: number; render: number };
 };
 
+export type GenerateStartResponse = {
+  job_id: string;
+};
+
+export type ProgressResponse = {
+  progress: {
+    status: "in_progress" | "completed" | "error";
+    current_entity?: string;
+    completed_count: number;
+    total_count: number;
+    message: string;
+  };
+  assets?: { png_url: string; pdf_url: string; image_files?: string[] };
+};
+
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "";
 
-async function http<T>(path: string, body: any): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+async function http<T>(path: string, method: string = "POST", body?: any): Promise<T> {
+  const options: RequestInit = {
+    method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  };
+  
+  if (body && method === "POST") {
+    options.body = JSON.stringify(body);
+  }
+  
+  const res = await fetch(`${API_BASE}${path}`, options);
   if (!res.ok) {
     let detail: any = undefined;
     try {
@@ -53,8 +79,10 @@ async function http<T>(path: string, body: any): Promise<T> {
 }
 
 export const api = {
-  preview: (req: PreviewRequest) => http<PreviewResponse>("/api/boards/preview", req),
-  generate: (req: GenerateRequest) => http<GenerateResponse>("/api/boards/generate", req),
+  preview: (req: PreviewRequest) => http<PreviewResponse>("/api/boards/preview", "POST", req),
+  generate: (req: GenerateRequest) => http<GenerateResponse>("/api/boards/generate", "POST", req),
+  generateStart: (req: GenerateRequest) => http<GenerateStartResponse>("/api/boards/generate/start", "POST", req),
+  generateStatus: (jobId: string) => http<ProgressResponse>(`/api/boards/generate/status/${jobId}`, "GET"),
 };
 
 

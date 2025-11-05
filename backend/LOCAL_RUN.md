@@ -12,9 +12,11 @@ uv pip install -r requirements.txt
 
 # Run server (loads .env automatically)
 source .venv/bin/activate
-source .env
+export $(cat .env | grep -v '^#' | xargs)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+#stop the proces
+pkill -f "uvicorn app.main:app"
 
 Backend will run on http://localhost:8000
 
@@ -28,7 +30,8 @@ npm install
 # Run dev server
 npm run dev
 ```
-
+# check if server is runing
+ps aux | grep uvicorn
 Frontend will run on http://localhost:5173
 
 ## Testing the Agent Flow

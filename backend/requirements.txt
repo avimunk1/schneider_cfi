@@ -6,4 +6,6 @@ Pillow==10.4.0
 reportlab==4.2.2
 google-genai==1.25.0
 openai==1.54.0
+python-bidi==0.6.7
+arabic-reshaper==3.0.0
 

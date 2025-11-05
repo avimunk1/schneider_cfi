@@ -19,9 +19,14 @@ def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
     # Normalize profile
     norm = normalize_profile(req.patient_profile, req.preferences)
     
+    # Build conversation context for LLM
+    conversation_context = "\n".join([
+        f"{msg.role}: {msg.text}" for msg in req.conversation_history
+    ])
+    
     # Use LLM to understand the request
     patient_dict = req.patient_profile.model_dump() if hasattr(req.patient_profile, "model_dump") else dict(req.patient_profile)
-    llm_result = understand_request(req.board_description, patient_dict)
+    llm_result = understand_request(req.board_description, patient_dict, conversation_context)
 
     # Check if LLM needs clarification
     if llm_result.get("needs_clarification"):
@@ -29,7 +34,16 @@ def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
         questions_text = "\n".join(llm_result.get("questions", []))
         return schemas.PreviewResponse(
             parsed=schemas.ParsedBoard(topic=None, entities=[], layout="2x4"),
-            profile=schemas.PreviewProfile(labels_languages=norm["labels_languages"], image_style=norm["image_style"]),
+            profile=schemas.PreviewProfile(
+                labels_languages=norm["labels_languages"], 
+                image_style=norm["image_style"],
+                age=req.patient_profile.age,
+                gender=req.patient_profile.gender,
+                language=req.patient_profile.language,
+                can_read=req.patient_profile.can_read,
+                religion=req.patient_profile.religion,
+                sector=req.patient_profile.sector
+            ),
             checks=schemas.Checks(ok=False, missing=["clarification_needed"]),
             summary=f"צריך הבהרה:\n{questions_text}",
         )
@@ -48,34 +62,87 @@ def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
 
     return schemas.PreviewResponse(
         parsed=parsed,
-        profile=schemas.PreviewProfile(labels_languages=norm["labels_languages"], image_style=norm["image_style"]),
+        profile=schemas.PreviewProfile(
+            labels_languages=norm["labels_languages"], 
+            image_style=norm["image_style"],
+            age=req.patient_profile.age,
+            gender=req.patient_profile.gender,
+            language=req.patient_profile.language,
+            can_read=req.patient_profile.can_read,
+            religion=req.patient_profile.religion,
+            sector=req.patient_profile.sector
+        ),
         checks=schemas.Checks(ok=checks["ok"], missing=checks["missing"]),
         summary=summary,
     )
 
 
-def handle_generate(req: schemas.GenerateRequest, assets_dir: str) -> schemas.GenerateResponse:
+def handle_generate(req: schemas.GenerateRequest, assets_dir: str, job_id: str = None) -> schemas.GenerateResponse:
     """
     Step 2: Use LLM to build image prompts, then generate with Google
     """
+    from pathlib import Path
+    from .tools.image_gen import _generate_with_gemini, _generate_placeholder
+    
     t_images_start = time.time()
 
     # Use LLM to build detailed prompts for each entity
     profile_dict = req.profile.model_dump() if hasattr(req.profile, "model_dump") else dict(req.profile)
+    
+    # Create a working copy with defaults for image generation
+    # but keep original profile for display/transparency
+    working_profile = profile_dict.copy()
+    if 'age' not in working_profile or working_profile['age'] is None:
+        working_profile['age'] = 10
+    if 'gender' not in working_profile or working_profile['gender'] is None:
+        working_profile['gender'] = 'child'
+    
+    # Build board context from topic and title
+    board_context = req.parsed.topic if hasattr(req.parsed, 'topic') and req.parsed.topic else req.title
+    if not board_context or board_context == "לוח תקשורת מותאם":
+        # Try to infer context from entities
+        if any(word in str(req.parsed.entities).lower() for word in ["breakfast", "לחם", "חלב", "ביצה", "בוקר"]):
+            board_context = "breakfast / ארוחת בוקר"
+    
     try:
         prompts = build_image_prompts(
             req.parsed.entities,
-            {"age": 8, "gender": "child"},  # TODO: pass actual profile
-            req.profile.image_style
+            working_profile,  # Use working profile with defaults for image generation
+            req.profile.image_style,
+            board_context
         )
-        print(f"[orchestrator] Got {len(prompts)} prompts from LLM")
+        print(f"[orchestrator] Got {len(prompts)} prompts from LLM (context: {board_context}, profile: age={working_profile.get('age')}, gender={working_profile.get('gender')})")
     except Exception as e:
-        print(f"[orchestrator] LLM prompt building failed: {e}, using simple prompts")
+        import traceback
+        print(f"[orchestrator] LLM prompt building failed: {e}")
+        print(f"[orchestrator] Traceback: {traceback.format_exc()}")
         # Fallback to simple prompts
         prompts = [{"entity": e, "prompt": f"A realistic {e} on white background"} for e in req.parsed.entities]
     
-    # Generate images with Google Gemini
-    image_paths = generate_images(prompts, assets_dir)
+    # Generate images with progress updates
+    image_paths = []
+    assets = Path(assets_dir)
+    
+    if job_id:
+        from .main import _generation_status
+    
+    for i, item in enumerate(prompts):
+        entity = item.get("entity", "item")
+        prompt_text = item.get("prompt", entity)
+        
+        # Update progress
+        if job_id and job_id in _generation_status:
+            _generation_status[job_id].current_entity = entity
+            _generation_status[job_id].completed_count = i
+            _generation_status[job_id].message = f"יוצר תמונה: {entity}..."
+        
+        # Generate single image
+        filename = _generate_with_gemini(entity, prompt_text, assets)
+        if not filename:
+            filename = _generate_placeholder(entity, assets)
+        
+        image_paths.append(filename)
+    
     t_images = int((time.time() - t_images_start) * 1000)
 
     # Labels
@@ -98,6 +165,7 @@ def handle_generate(req: schemas.GenerateRequest, assets_dir: str) -> schemas.Ge
     assets = schemas.Assets(
         png_url=f"/assets/{out_png}",
         pdf_url=f"/assets/{out_pdf}",
+        image_files=image_paths,  # Return the list of individual image files
     )
     return schemas.GenerateResponse(assets=assets, timings_ms=schemas.Timings(images=t_images, render=t_render))
 
