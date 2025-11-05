@@ -53,7 +53,9 @@ export type ProgressResponse = {
   assets?: { png_url: string; pdf_url: string; image_files?: string[] };
 };
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "";
+// In local dev: empty string → uses Vite proxy (/api → localhost:8000)
+// In production: Railway backend URL from environment variable
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 async function http<T>(path: string, method: string = "POST", body?: any): Promise<T> {
   const options: RequestInit = {

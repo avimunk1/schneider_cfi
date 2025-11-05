@@ -22,6 +22,143 @@ type PatientProfile = {
   sector?: string;
 };
 
+// Helper: Calculate optimal board layout
+function calculateBoardLayout(count: number) {
+  // A4 dimensions: 794px width, content area accounting for padding
+  const contentWidth = 794 - 64; // 794px - (32px padding on each side)
+  const contentHeight = 1123 - 120; // A4 height minus title space
+  
+  // Determine optimal grid dimensions (cols x rows)
+  // Use asymmetric grids for better space utilization
+  let cols: number, rows: number;
+  
+  if (count <= 4) {
+    // 1-4: Use 2x2 grid
+    cols = 2;
+    rows = 2;
+  } else if (count <= 6) {
+    // 5-6: Use 3x2 grid (wider)
+    cols = 3;
+    rows = 2;
+  } else if (count <= 9) {
+    // 7-9: Use 3x3 grid
+    cols = 3;
+    rows = 3;
+  } else if (count <= 12) {
+    // 10-12: Use 4x3 grid
+    cols = 4;
+    rows = 3;
+  } else if (count <= 16) {
+    // 13-16: Use 4x4 grid
+    cols = 4;
+    rows = 4;
+  } else {
+    // 17+: Use 5x4 or larger
+    cols = 5;
+    rows = Math.ceil(count / 5);
+  }
+  
+  // Calculate gap (minimum for easy selection)
+  const minGap = 16;
+  const maxGap = 30;
+  let gap = Math.round(Math.min(contentWidth, contentHeight) / Math.max(cols, rows) * 0.06);
+  gap = Math.max(minGap, Math.min(maxGap, gap));
+  
+  // Calculate maximum cell size that fits in the available space
+  const availableWidthForCells = contentWidth - (gap * (cols - 1));
+  const availableHeightForCells = contentHeight - (gap * (rows - 1));
+  
+  const maxCellWidth = Math.floor(availableWidthForCells / cols);
+  const maxCellHeight = Math.floor(availableHeightForCells / rows);
+  
+  // Use the smaller dimension to keep cells square
+  const baseCellSize = Math.min(maxCellWidth, maxCellHeight);
+  
+  // Generate spiral position mapping for the asymmetric grid
+  const spiralPositions = generateAsymmetricSpiralPositions(rows, cols, count);
+  
+  return { gridSize: cols, rows, cols, baseCellSize, gap, spiralPositions };
+}
+
+// Helper: Generate spiral positions for asymmetric grids (rows x cols)
+function generateAsymmetricSpiralPositions(rows: number, cols: number, count: number): Array<[number, number]> {
+  const positions: Array<[number, number]> = [];
+  
+  // Phase 1: Corners (if they exist)
+  const corners: Array<[number, number]> = [
+    [0, 0],                 // top-left
+    [0, cols - 1],          // top-right
+    [rows - 1, cols - 1],   // bottom-right
+    [rows - 1, 0],          // bottom-left
+  ];
+  
+  for (const corner of corners) {
+    if (positions.length < count && corner[0] < rows && corner[1] < cols) {
+      positions.push(corner);
+    }
+  }
+  
+  // Phase 2: Edges (excluding corners)
+  // Top edge
+  for (let col = 1; col < cols - 1; col++) {
+    if (positions.length < count) positions.push([0, col]);
+  }
+  
+  // Right edge
+  for (let row = 1; row < rows - 1; row++) {
+    if (positions.length < count) positions.push([row, cols - 1]);
+  }
+  
+  // Bottom edge
+  for (let col = cols - 2; col > 0; col--) {
+    if (positions.length < count) positions.push([rows - 1, col]);
+  }
+  
+  // Left edge
+  for (let row = rows - 2; row > 0; row--) {
+    if (positions.length < count) positions.push([row, 0]);
+  }
+  
+  // Phase 3: Interior cells (spiral inward)
+  let layer = 1;
+  while (positions.length < count && layer < Math.min(rows, cols) / 2) {
+    const startRow = layer;
+    const endRow = rows - layer - 1;
+    const startCol = layer;
+    const endCol = cols - layer - 1;
+    
+    if (startRow > endRow || startCol > endCol) break;
+    
+    // Top inner edge
+    for (let col = startCol; col <= endCol && positions.length < count; col++) {
+      positions.push([startRow, col]);
+    }
+    
+    // Right inner edge
+    for (let row = startRow + 1; row <= endRow && positions.length < count; row++) {
+      positions.push([row, endCol]);
+    }
+    
+    // Bottom inner edge
+    if (endRow > startRow) {
+      for (let col = endCol - 1; col >= startCol && positions.length < count; col--) {
+        positions.push([endRow, col]);
+      }
+    }
+    
+    // Left inner edge
+    if (endCol > startCol) {
+      for (let row = endRow - 1; row > startRow && positions.length < count; row--) {
+        positions.push([row, startCol]);
+      }
+    }
+    
+    layer++;
+  }
+  
+  return positions;
+}
+
 export default function NewBoard() {
   const [messages, setMessages] = useState<AgentMessage[]>([
     { role: "agent", text: "שלום! אני הסוכן שלך ליצירת לוח תקשורת.\n\nבואו נתחיל - ספר/י לי על הלוח שאת/ה צריך/ה, ואני אשאל שאלות הבהרה לפי הצורך." },
@@ -31,7 +168,6 @@ export default function NewBoard() {
   const [preview, setPreview] = useState<any>(null);
   const [title, setTitle] = useState("לוח תקשורת מותאם");
   const [assets, setAssets] = useState<{ png_url: string; pdf_url: string } | null>(null);
-  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
   const [generatedBoard, setGeneratedBoard] = useState<GeneratedBoard | null>(null);
   const [patientProfile, setPatientProfile] = useState<PatientProfile>({});
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -103,7 +239,6 @@ export default function NewBoard() {
         title,
       });
       
-      setGenerationJobId(res.job_id);
       startPolling(res.job_id);
     } catch (e: any) {
       setMessages((m) => [...m, { role: "agent", text: `שגיאה: ${e.message}` }]);
@@ -159,12 +294,10 @@ export default function NewBoard() {
             { role: "agent", text: "הלוח מוכן! גלול למטה לצפייה והורדה." },
           ]);
           setUiState("idle");
-          setGenerationJobId(null);
         } else if (status.progress.status === "error") {
           if (pollingRef.current) clearInterval(pollingRef.current);
           setMessages((m) => [...m, { role: "agent", text: status.progress.message }]);
           setUiState("idle");
-          setGenerationJobId(null);
         }
       } catch (e: any) {
         console.error("Polling error:", e);
@@ -195,6 +328,30 @@ export default function NewBoard() {
     }
   };
 
+  // Quick test with existing images
+  const [testImageCount, setTestImageCount] = useState<number>(4);
+  
+  const availableImages = [
+    'img_00b6f530.png', 'img_10a94e8c.png', 'img_313f8140.png', 'img_3f37cd8c.png',
+    'img_49454a03.png', 'img_5a4ded43.png', 'img_751c01b4.png', 'img_8f8ddb2e.png',
+    'img_b5e4c86b.png', 'img_cf4229e4.png', 'img_d31fda13.png', 'img_e668d51e.png',
+  ];
+  
+  const generateTestBoard = () => {
+    const selectedImages = availableImages.slice(0, testImageCount);
+    const entities = selectedImages.map((_, i) => `פריט ${i + 1}`);
+    const images = Object.fromEntries(
+      selectedImages.map((img, i) => [`פריט ${i + 1}`, `/assets/${img}`])
+    );
+    
+    setGeneratedBoard({
+      title: `לוח בדיקה - ${testImageCount} תמונות`,
+      entities,
+      images,
+      layout: `${Math.ceil(Math.sqrt(testImageCount))}x${Math.ceil(Math.sqrt(testImageCount))}`
+    });
+  };
+
   return (
     <div dir="rtl" className="max-w-4xl mx-auto p-6 space-y-4">
       <div className="flex justify-between items-center">
@@ -206,6 +363,30 @@ export default function NewBoard() {
           {showProfileForm ? "הסתר" : "פרטי מטופל"}
         </button>
       </div>
+
+      {/* Quick Test Section - Only show if enabled via env variable */}
+      {import.meta.env.VITE_SHOW_TEST_FEATURES === 'true' && (
+        <div className="border rounded-lg p-4 bg-green-50 space-y-3">
+          <h3 className="font-medium text-green-900">🧪 בדיקה מהירה - תמונות קיימות</h3>
+          <div className="flex items-center gap-3">
+            <label className="text-sm">מספר תמונות:</label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={testImageCount}
+              onChange={(e) => setTestImageCount(parseInt(e.target.value) || 1)}
+              className="border rounded-md p-2 w-20"
+            />
+            <button
+              onClick={generateTestBoard}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              צור לוח בדיקה
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Patient Profile Form */}
       {showProfileForm && (
@@ -374,33 +555,80 @@ export default function NewBoard() {
           >
             <h1 className="text-3xl font-bold text-center mb-6">{generatedBoard.title}</h1>
             
-            <div 
-              className={`grid gap-4 h-full`}
-              style={{
-                gridTemplateColumns: generatedBoard.layout === "3x3" ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
-                gridTemplateRows: generatedBoard.layout === "3x3" ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)'
-              }}
-            >
-              {generatedBoard.entities.map((entity, idx) => (
+            {(() => {
+              const count = generatedBoard.entities.length;
+              const { rows, cols, baseCellSize, gap, spiralPositions } = calculateBoardLayout(count);
+              
+              // Create a 2D grid to place entities
+              const grid: Array<Array<{ entity: string; image: string } | null>> = Array(rows)
+                .fill(null)
+                .map(() => Array(cols).fill(null));
+              
+              // Place entities in spiral positions
+              generatedBoard.entities.forEach((entity, idx) => {
+                if (idx < spiralPositions.length) {
+                  const [row, col] = spiralPositions[idx];
+                  if (row < rows && col < cols) {
+                    grid[row][col] = {
+                      entity,
+                      image: generatedBoard.images[entity]
+                    };
+                  }
+                }
+              });
+              
+              // Dynamic sizing based on count
+              const imageHeight = baseCellSize * 0.65; // 65% of cell for image
+              const fontSize = baseCellSize > 250 ? '1.5rem' : baseCellSize > 180 ? '1.25rem' : baseCellSize > 120 ? '1rem' : '0.875rem';
+              const padding = baseCellSize > 250 ? '2rem' : baseCellSize > 180 ? '1.5rem' : baseCellSize > 120 ? '1rem' : '0.75rem';
+              
+              return (
                 <div 
-                  key={idx}
-                  className="flex flex-col items-center justify-center rounded-xl p-4 bg-slate-100 shadow-sm"
+                  className="grid w-full h-full"
+                  style={{
+                    gridTemplateColumns: `repeat(${cols}, ${baseCellSize}px)`,
+                    gridTemplateRows: `repeat(${rows}, ${baseCellSize}px)`,
+                    gap: `${gap}px`,
+                    justifyContent: 'space-evenly',
+                    alignContent: 'space-evenly'
+                  }}
                 >
-                  {generatedBoard.images[entity] && (
-                    <img 
-                      src={generatedBoard.images[entity]}
-                      alt={entity}
-                      className="w-full h-32 object-contain mb-2"
-                      onError={(e) => {
-                        // Fallback for missing images
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  )}
-                  <div className="text-center text-lg font-medium">{entity}</div>
+                  {grid.flat().map((cell, idx) => {
+                    if (!cell) {
+                      // Empty cell
+                      return <div key={`empty-${idx}`} />;
+                    }
+                    
+                    return (
+                      <div 
+                        key={cell.entity}
+                        className="flex flex-col items-center justify-center rounded-xl bg-slate-100 shadow-sm"
+                        style={{ padding }}
+                      >
+                        {cell.image && (
+                          <img 
+                            src={cell.image}
+                            alt={cell.entity}
+                            className="w-full object-contain mb-2"
+                            style={{ height: `${imageHeight}px` }}
+                            onError={(e) => {
+                              // Fallback for missing images
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <div 
+                          className="text-center font-medium"
+                          style={{ fontSize }}
+                        >
+                          {cell.entity}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
 
           {/* Backend PDF Link (alternative) */}

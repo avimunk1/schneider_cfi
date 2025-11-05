@@ -1,0 +1,17 @@
+# Exclude backend from Vercel builds
+backend/
+backend/**
+
+# Exclude generated assets (will be served from Railway)
+assets/board_*.png
+assets/board_*.pdf
+
+# Exclude documentation
+*.md
+!README.md
+
+# Exclude Python/backend files
+**/__pycache__/
+**/*.pyc
+**/.venv/
+

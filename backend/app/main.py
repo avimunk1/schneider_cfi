@@ -13,7 +13,10 @@ from . import orchestrator
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ASSETS_DIR = BASE_DIR.parent / "assets"
+
+# Assets directory: use Railway volume mount if available, fallback to local
+# Railway volume will be mounted at /app/assets in production
+ASSETS_DIR = Path(os.getenv("ASSETS_PATH", BASE_DIR.parent / "assets"))
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory progress store (use Redis for production)
