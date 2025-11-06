@@ -180,6 +180,12 @@ export default function NewBoard() {
   const [showProfileForm, setShowProfileForm] = useState(false);
   const pollingRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, uiState]);
 
   // Stop polling on unmount
   useEffect(() => {
@@ -214,12 +220,12 @@ export default function NewBoard() {
       const p = await api.preview(req);
       setPreview(p);
       
-      // Add agent response
+      // Add agent response with confirmation question
       setMessages((m) => [
         ...m,
         {
           role: "agent",
-          text: p.summary,
+          text: `${p.summary}\n\nהאם תרצה שאתחיל ליצור את הלוח?`,
         },
       ]);
     } catch (e: any) {
@@ -502,15 +508,42 @@ export default function NewBoard() {
           <div key={i} className={m.role === "agent" ? "text-purple-800" : "text-gray-800"}>
             <span className="font-medium">{m.role === "agent" ? "🤖 סוכן" : "👤 את/ה"}:</span>{" "}
             <span className="whitespace-pre-wrap">{m.text}</span>
+            
+            {/* Show YES/NO buttons after the last agent message if preview is ready */}
+            {m.role === "agent" && i === messages.length - 1 && preview && uiState === "idle" && !assets && (
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={startGeneration}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                >
+                  ✅ כן, התחל
+                </button>
+                <button
+                  onClick={() => {
+                    setPreview(null);
+                    setMessages((m) => [...m, { role: "agent", text: "בסדר, מה תרצה לשנות?" }]);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                >
+                  ✏️ ערוך פרטים
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {uiState === "thinking" && (
           <div className="text-purple-600 italic">סוכן חושב...</div>
         )}
+        {uiState === "generating" && (
+          <div className="text-green-600 italic">יוצר את הלוח...</div>
+        )}
+        {/* Scroll anchor */}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area - Always visible for flexible conversation */}
-      <div className="flex gap-2">
+      {/* Input Area - Hide during generation */}
+      {uiState !== "generating" && (
+        <div className="flex gap-2">
         <input
           className="flex-1 border rounded-md p-2"
           placeholder="תאר/י את הלוח הנדרש או שנה/י את הבקשה..."
@@ -526,16 +559,14 @@ export default function NewBoard() {
         >
           שלח
         </button>
-      </div>
+        </div>
+      )}
 
-      {/* Action Area - Show when preview is ready */}
+      {/* Title edit - only show when preview exists but before generation starts */}
       {preview && uiState === "idle" && !assets && (
-        <div className="border rounded-lg p-4 bg-green-50 space-y-3">
-          <div className="font-medium text-green-800">מוכן ליצירה!</div>
-          <div className="text-sm text-gray-700" dir="rtl">
-            פריטים: {preview.parsed.entities.join(", ")}
-          </div>
+        <div className="border rounded-lg p-3 bg-blue-50">
           <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">כותרת הלוח:</label>
             <input
               className="border rounded-md p-2 flex-1"
               value={title}
@@ -543,12 +574,6 @@ export default function NewBoard() {
               placeholder="כותרת הלוח"
               dir="rtl"
             />
-            <button 
-              className="px-4 py-2 bg-green-600 text-white rounded-md" 
-              onClick={startGeneration}
-            >
-              צור לוח
-            </button>
           </div>
         </div>
       )}
