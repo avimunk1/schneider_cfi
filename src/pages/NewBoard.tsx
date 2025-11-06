@@ -171,7 +171,7 @@ export default function NewBoard() {
   const [generatedBoard, setGeneratedBoard] = useState<GeneratedBoard | null>(null);
   const [patientProfile, setPatientProfile] = useState<PatientProfile>({});
   const [showProfileForm, setShowProfileForm] = useState(false);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
 
   // Stop polling on unmount
