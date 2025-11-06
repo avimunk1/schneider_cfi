@@ -169,7 +169,14 @@ export default function NewBoard() {
   const [title, setTitle] = useState("לוח תקשורת מותאם");
   const [assets, setAssets] = useState<{ png_url: string; pdf_url: string } | null>(null);
   const [generatedBoard, setGeneratedBoard] = useState<GeneratedBoard | null>(null);
-  const [patientProfile, setPatientProfile] = useState<PatientProfile>({});
+  const [patientProfile, setPatientProfile] = useState<PatientProfile>({
+    age: 50,
+    gender: "גבר",
+    can_read: true,
+    second_language: "עברית",
+    sector: "יהודי",
+    religion: "לא דתי",
+  });
   const [showProfileForm, setShowProfileForm] = useState(false);
   const pollingRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -399,7 +406,29 @@ export default function NewBoard() {
               <input
                 type="number"
                 value={patientProfile.age || ""}
-                onChange={(e) => setPatientProfile({ ...patientProfile, age: parseInt(e.target.value) || undefined })}
+                onChange={(e) => {
+                  const age = parseInt(e.target.value) || undefined;
+                  const updates: Partial<PatientProfile> = { age };
+                  
+                  // Auto-set gender based on age
+                  if (age && age < 18) {
+                    updates.gender = "ילד";
+                  } else if (age && age >= 18) {
+                    updates.gender = "גבר";
+                  }
+                  
+                  // Auto-set can_read based on age
+                  if (age && age < 7) {
+                    updates.can_read = false;
+                  } else if (age && age >= 7) {
+                    updates.can_read = true;
+                  }
+                  
+                  setPatientProfile({ 
+                    ...patientProfile, 
+                    ...updates
+                  });
+                }}
                 className="w-full border rounded-md p-2"
                 placeholder="לדוגמה: 8"
               />
@@ -447,14 +476,9 @@ export default function NewBoard() {
                 onChange={(e) => setPatientProfile({ ...patientProfile, sector: e.target.value || undefined })}
                 className="w-full border rounded-md p-2"
               >
-                <option value="">לא צוין</option>
-                <option value="חילוני">חילוני</option>
-                <option value="מסורתי">מסורתי</option>
-                <option value="דתי">דתי</option>
-                <option value="חרדי">חרדי</option>
+                <option value="יהודי">יהודי</option>
                 <option value="מוסלמי">מוסלמי</option>
                 <option value="נוצרי">נוצרי</option>
-                <option value="דרוזי">דרוזי</option>
               </select>
             </div>
             <div>
@@ -464,7 +488,6 @@ export default function NewBoard() {
                 onChange={(e) => setPatientProfile({ ...patientProfile, religion: e.target.value || undefined })}
                 className="w-full border rounded-md p-2"
               >
-                <option value="">לא צוין</option>
                 <option value="דתי">דתי</option>
                 <option value="לא דתי">לא דתי</option>
               </select>
