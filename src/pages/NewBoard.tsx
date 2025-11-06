@@ -276,9 +276,10 @@ export default function NewBoard() {
           // Build the generated board for display
           if (preview && status.assets.image_files) {
             const imageMap: { [key: string]: string } = {};
+            const apiBase = import.meta.env.VITE_API_BASE_URL || "";
             preview.parsed.entities.forEach((entity: string, idx: number) => {
               // Map entities to generated image URLs
-              imageMap[entity] = `/assets/${status.assets!.image_files![idx]}`;
+              imageMap[entity] = `${apiBase}/assets/${status.assets!.image_files![idx]}`;
             });
             
             setGeneratedBoard({
