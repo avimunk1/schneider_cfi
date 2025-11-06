@@ -37,6 +37,7 @@ vertixai-400510-31a15c064ece.json
 !package.json
 !package-lock.json
 !tsconfig.json
+!vercel.json
 !tsconfig.node.json
 !tailwind.config.js
 !postcss.config.js
