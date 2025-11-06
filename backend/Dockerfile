@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/requirements.txt
-RUN uv pip install -r /app/requirements.txt
+RUN uv pip install --system -r /app/requirements.txt
 
 COPY backend/app /app/app
 
