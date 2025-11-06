@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6 libjpeg62-turbo zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
+COPY backend/requirements.txt /app/requirements.txt
 RUN uv pip install -r /app/requirements.txt
 
-COPY app /app/app
+COPY backend/app /app/app
 
 EXPOSE 8000
 
