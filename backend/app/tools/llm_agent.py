@@ -228,10 +228,16 @@ Return JSON array:
     result = json.loads(response.choices[0].message.content)
     print(f"[llm_agent] Parsed result: {result}")
     
-    # Handle both array directly or wrapped in "prompts" key
+    # Handle both array directly or wrapped in various keys
     if isinstance(result, list):
         return result
-    prompts = result.get("prompts", result.get("image_prompts", result.get("items", [])))
+    prompts = (
+        result.get("prompts")
+        or result.get("image_prompts")
+        or result.get("items")
+        or result.get("entities")
+        or []
+    )
     print(f"[llm_agent] Extracted prompts: {prompts}")
     return prompts
 
