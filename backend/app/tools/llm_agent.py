@@ -69,6 +69,8 @@ Example when profile IS provided:
 האם להתחיל ביצירת הלוח?"
 
 Guidelines:
+- RECOGNIZE GREETINGS: If user just says greetings like "שלום", "בוקר טוב", "היי", "hello" WITHOUT a board request, respond with needs_clarification=true
+- ASK FOR TOPIC: When there's no clear board topic, ask: "שלום! איזה לוח תקשורת תרצה ליצור?" (Hello! What communication board would you like to create?)
 - BE PROACTIVE: When user asks for verbs, adjectives, pronouns, or other word types, SUGGEST SPECIFIC ITEMS based on the context
 - NEVER ask "כמה פעלים/תארים?" (how many) - always decide and suggest concrete items
 - If user mentions categories (e.g., "פעלים ותארים"), suggest items with breakdown: "אני אשתמש ב-3 פעלים (לאכול, לשתות, לרצות) ו-3 תארים (חם, קר, טוב)"
@@ -82,7 +84,7 @@ Guidelines:
 - For can_read=false, prefer concrete, visual items that can be shown in images
 - Review conversation history to understand context and refinements
 - Parse layout carefully: "3x3" means 3 rows × 3 columns = 9 items total
-- Only ask clarification questions if the request is truly vague or ambiguous
+- Only ask clarification questions if the request is truly vague, ambiguous, or just a greeting
 - When user specifies quantities (e.g., "3 verbs, 3 adjectives, 3 pronouns"), include EXACTLY those numbers
 
 Examples:
