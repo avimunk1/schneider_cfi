@@ -382,9 +382,9 @@ export default function NewBoard() {
   };
 
   return (
-    <div dir="rtl" className="max-w-4xl mx-auto p-6 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">סוכן יצירת לוח חדש</h1>
+    <div dir="rtl" className="max-w-4xl mx-auto p-3 sm:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold">סוכן יצירת לוח חדש</h1>
         <button
           onClick={() => {
             setShowProfileForm(!showProfileForm);
@@ -392,7 +392,7 @@ export default function NewBoard() {
               setProfileWasModified(true); // Mark as modified when opened
             }
           }}
-          className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md"
+          className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-md w-full sm:w-auto"
         >
           {showProfileForm ? "הסתר" : "פרטי מטופל"}
         </button>
@@ -424,9 +424,9 @@ export default function NewBoard() {
 
       {/* Patient Profile Form */}
       {showProfileForm && (
-        <div className="border rounded-lg p-4 bg-blue-50 space-y-3">
+        <div className="border rounded-lg p-3 sm:p-4 bg-blue-50 space-y-3">
           <h3 className="font-medium text-blue-900">פרטי המטופל (אופציונלי)</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm mb-1">גיל</label>
               <input
@@ -523,7 +523,7 @@ export default function NewBoard() {
       )}
 
       {/* Conversation Area */}
-      <div className="border rounded-lg p-4 bg-white space-y-3 max-h-[500px] overflow-y-auto">
+      <div className="border rounded-lg p-3 sm:p-4 bg-white space-y-3 max-h-[400px] sm:max-h-[500px] overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === "agent" ? "text-purple-800" : "text-gray-800"}>
             <span className="font-medium inline-flex items-center gap-1">
@@ -540,10 +540,10 @@ export default function NewBoard() {
             
             {/* Show YES/NO buttons after the last agent message if preview is ready AND agent confirmed understanding */}
             {m.role === "agent" && i === messages.length - 1 && preview && uiState === "idle" && !assets && m.text.includes("הבנתי") && (
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={startGeneration}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium w-full sm:w-auto"
                 >
                   ✅ כן, התחל
                 </button>
@@ -553,7 +553,7 @@ export default function NewBoard() {
                     setIsEditingAfterPreview(true);
                     setMessages((m) => [...m, { role: "agent", text: "בסדר, מה תרצה לשנות?" }]);
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium w-full sm:w-auto"
                 >
                   ✏️ ערוך פרטים
                 </button>
@@ -617,19 +617,19 @@ export default function NewBoard() {
       {/* Generated Board Display - Show when completed */}
       {generatedBoard && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold">הלוח שלך מוכן!</h2>
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <h2 className="text-lg sm:text-xl font-bold">הלוח שלך מוכן!</h2>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <button 
                 onClick={downloadPNG}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Lucide.Download className="w-4 h-4" />
                 הורד כ-PNG
               </button>
               <button 
                 onClick={startNewConversation}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Lucide.Plus className="w-4 h-4" />
                 שיחה חדשה
@@ -640,14 +640,14 @@ export default function NewBoard() {
           {/* A4 Frame Board */}
           <div 
             ref={boardRef}
-            className="bg-white rounded-lg shadow-lg p-8 mx-auto"
+            className="bg-white rounded-lg shadow-lg p-4 sm:p-8 mx-auto w-full sm:w-auto overflow-x-auto"
             style={{ 
-              width: '794px', 
+              maxWidth: '794px', 
               aspectRatio: '1 / 1.414',
               direction: 'rtl'
             }}
           >
-            <h1 className="text-3xl font-bold text-center mb-6">{generatedBoard.title}</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6">{generatedBoard.title}</h1>
             
             {(() => {
               const count = generatedBoard.entities.length;
