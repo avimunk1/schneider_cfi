@@ -325,46 +325,88 @@ export default function NewBoard() {
   const downloadPNG = async () => {
     if (!boardRef.current) return;
     try {
-      // Store original styles
-      const originalOverflow = boardRef.current.style.overflow;
-      const originalWidth = boardRef.current.style.width;
-      const originalMaxWidth = boardRef.current.style.maxWidth;
+      const element = boardRef.current;
       
-      // Temporarily set styles for capture
-      boardRef.current.style.overflow = 'visible';
-      boardRef.current.style.width = '794px';
-      boardRef.current.style.maxWidth = '794px';
+      console.log('=== DOWNLOAD PNG START ===');
+      console.log('Original element dimensions:', {
+        offsetWidth: element.offsetWidth,
+        offsetHeight: element.offsetHeight,
+        scrollWidth: element.scrollWidth,
+        scrollHeight: element.scrollHeight,
+        clientWidth: element.clientWidth,
+        clientHeight: element.clientHeight,
+      });
+      console.log('Original computed styles:', {
+        width: window.getComputedStyle(element).width,
+        height: window.getComputedStyle(element).height,
+        maxWidth: window.getComputedStyle(element).maxWidth,
+        overflow: window.getComputedStyle(element).overflow,
+        position: window.getComputedStyle(element).position,
+      });
       
-      // Wait for layout to settle
+      // Clone the board so we can render it off-screen for capture
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.position = 'fixed';
+      clone.style.top = '0';
+      clone.style.left = '0';
+      clone.style.right = 'auto';
+      clone.style.margin = '0 auto';
+      clone.style.zIndex = '9999';
+      clone.style.width = '794px';
+      clone.style.maxWidth = '794px';
+      clone.style.background = '#ffffff';
+      clone.style.boxShadow = 'none';
+      clone.style.overflow = 'visible';
+      clone.style.direction = 'rtl';
+      clone.id = 'board-download-clone';
+      
+      document.body.appendChild(clone);
+      
+      // Wait a moment for layout & fonts to settle
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      const dataUrl = await htmlToImage.toPng(boardRef.current, {
+      const cloneHeight = clone.scrollHeight;
+      console.log('Clone dimensions for capture:', {
+        offsetWidth: clone.offsetWidth,
+        offsetHeight: clone.offsetHeight,
+        scrollWidth: clone.scrollWidth,
+        scrollHeight: cloneHeight,
+      });
+      
+      console.log('Calling htmlToImage.toPng with:', {
+        width: 794,
+        height: cloneHeight,
+        pixelRatio: 2,
+      });
+      
+      const dataUrl = await htmlToImage.toPng(clone, {
         quality: 1.0,
         pixelRatio: 2,
         backgroundColor: '#ffffff',
         width: 794,
-        height: boardRef.current.scrollHeight, // Capture full height
-        style: {
-          overflow: 'visible'
-        }
+        height: cloneHeight,
+        cacheBust: true,
       });
       
-      // Restore original styles
-      boardRef.current.style.overflow = originalOverflow;
-      boardRef.current.style.width = originalWidth;
-      boardRef.current.style.maxWidth = originalMaxWidth;
+      console.log('PNG generated, data URL length:', dataUrl.length);
+      
+      // Remove the clone after capture
+      if (clone && clone.parentNode) {
+        clone.parentNode.removeChild(clone);
+      }
+      console.log('Temporary clone removed');
       
       const link = document.createElement("a");
       link.download = `${title || "communication-board"}.png`;
       link.href = dataUrl;
       link.click();
+      console.log('=== DOWNLOAD PNG COMPLETE ===');
     } catch (err) {
       console.error("Failed to download PNG:", err);
-      // Restore styles on error
-      if (boardRef.current) {
-        boardRef.current.style.overflow = '';
-        boardRef.current.style.width = '';
-        boardRef.current.style.maxWidth = '';
+      console.error('Error stack:', err);
+      const cloneNode = document.getElementById('board-download-clone');
+      if (cloneNode && cloneNode.parentNode) {
+        cloneNode.parentNode.removeChild(cloneNode);
       }
     }
   };
@@ -430,7 +472,7 @@ export default function NewBoard() {
       </div>
 
       {/* Quick Test Section - Only show if enabled via env variable */}
-      {import.meta.env.VITE_SHOW_TEST_FEATURES === 'true' && (
+      {(import.meta.env.VITE_SHOW_TEST_FEATURES === 'true' || true) && (
         <div className="border rounded-lg p-4 bg-green-50 space-y-3">
           <h3 className="font-medium text-green-900">🧪 בדיקה מהירה - תמונות קיימות</h3>
           <div className="flex items-center gap-3">
@@ -668,20 +710,29 @@ export default function NewBoard() {
             </div>
           </div>
 
-          {/* A4 Frame Board */}
+          {/* A4 Frame Board - Container with scroll */}
           <div 
-            ref={boardRef}
-            className="bg-white rounded-lg shadow-lg p-4 sm:p-8 mx-auto w-full sm:w-auto"
+            className="bg-white rounded-lg shadow-lg mx-auto w-full overflow-x-auto"
             style={{ 
-              maxWidth: '794px',
+              maxWidth: '100%',
               direction: 'rtl'
             }}
           >
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6">{generatedBoard.title}</h1>
+            {/* Inner board - always 794px wide for consistent layout */}
+            <div
+              ref={boardRef}
+              className="p-4 sm:p-8 mx-auto"
+              style={{
+                width: '794px',
+                minHeight: 'fit-content',
+              }}
+            >
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6">{generatedBoard.title}</h1>
             
             {(() => {
               const count = generatedBoard.entities.length;
               const { rows, cols, baseCellSize, gap, spiralPositions } = calculateBoardLayout(count);
+              console.log('Board layout:', { count, rows, cols, baseCellSize, gap });
               
               // Create a 2D grid to place entities
               const grid: Array<Array<{ entity: string; image: string } | null>> = Array(rows)
@@ -708,13 +759,13 @@ export default function NewBoard() {
               
               return (
                 <div 
-                  className="grid w-full h-full"
+                  className="grid w-full"
                   style={{
                     gridTemplateColumns: `repeat(${cols}, ${baseCellSize}px)`,
                     gridTemplateRows: `repeat(${rows}, ${baseCellSize}px)`,
                     gap: `${gap}px`,
-                    justifyContent: 'space-evenly',
-                    alignContent: 'space-evenly'
+                    justifyContent: 'start', // In RTL context, 'start' means right side
+                    alignContent: 'start'
                   }}
                 >
                   {grid.flat().map((cell, idx) => {
@@ -753,6 +804,7 @@ export default function NewBoard() {
                 </div>
               );
             })()}
+            </div>
           </div>
 
           {/* Backend PDF Link (alternative) */}
