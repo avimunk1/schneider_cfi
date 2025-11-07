@@ -1,4 +1,5 @@
 import time
+import logging
 from typing import Dict
 
 from . import schemas
@@ -8,6 +9,9 @@ from .tools.checker import validate_requirements
 from .tools.image_gen import generate_images
 from .tools.labels import generate_labels
 from .tools.render import render_board
+
+
+logger = logging.getLogger(__name__)
 
 
 def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
@@ -119,54 +123,95 @@ def handle_generate(req: schemas.GenerateRequest, assets_dir: str, job_id: str =
         # Fallback to simple prompts
         prompts = [{"entity": e, "prompt": f"A realistic {e} on white background"} for e in req.parsed.entities]
     
-    # Generate images with progress updates
-    image_paths = []
     assets = Path(assets_dir)
-    
+    max_attempts = 2
+    last_error = None
+
     if job_id:
         from .main import _generation_status
-    
-    for i, item in enumerate(prompts):
-        entity = item.get("entity", "item")
-        prompt_text = item.get("prompt", entity)
-        
-        # Update progress
-        if job_id and job_id in _generation_status:
-            _generation_status[job_id].current_entity = entity
-            _generation_status[job_id].completed_count = i
-            _generation_status[job_id].message = f"יוצר תמונה: {entity}..."
-        
-        # Generate single image
-        filename = _generate_with_gemini(entity, prompt_text, assets)
-        if not filename:
-            filename = _generate_placeholder(entity, assets)
-        
-        image_paths.append(filename)
-    
-    t_images = int((time.time() - t_images_start) * 1000)
 
-    # Labels
-    labels_per_entity = generate_labels(
-        req.parsed.entities,
-        req.profile.labels_languages,
-    )
+    for attempt in range(1, max_attempts + 1):
+        image_paths = []
+        try:
+            if job_id and job_id in _generation_status:
+                _generation_status[job_id].message = "יוצר תמונות..."
 
-    t_render_start = time.time()
-    out_png, out_pdf = render_board(
-        layout=req.parsed.layout,
-        title=req.title,
-        entities=req.parsed.entities,
-        image_paths=image_paths,
-        labels_per_entity=labels_per_entity,
-        assets_dir=assets_dir,
-    )
-    t_render = int((time.time() - t_render_start) * 1000)
+            for i, item in enumerate(prompts):
+                entity = item.get("entity", "item")
+                prompt_text = item.get("prompt", entity)
 
-    assets = schemas.Assets(
-        png_url=f"/assets/{out_png}",
-        pdf_url=f"/assets/{out_pdf}",
-        image_files=image_paths,  # Return the list of individual image files
-    )
-    return schemas.GenerateResponse(assets=assets, timings_ms=schemas.Timings(images=t_images, render=t_render))
+                if job_id and job_id in _generation_status:
+                    _generation_status[job_id].current_entity = entity
+                    _generation_status[job_id].completed_count = i
+                    _generation_status[job_id].message = f"יוצר תמונה: {entity}..."
+
+                filename = _generate_with_gemini(entity, prompt_text, assets)
+                if not filename:
+                    filename = _generate_placeholder(entity, assets)
+
+                image_paths.append(filename)
+
+            if len(image_paths) != len(req.parsed.entities):
+                raise RuntimeError(
+                    f"Generated {len(image_paths)} images but expected {len(req.parsed.entities)}"
+                )
+
+            t_images = int((time.time() - t_images_start) * 1000)
+
+            labels_per_entity = generate_labels(
+                req.parsed.entities,
+                req.profile.labels_languages,
+            )
+
+            t_render_start = time.time()
+            out_png, out_pdf = render_board(
+                layout=req.parsed.layout,
+                title=req.title,
+                entities=req.parsed.entities,
+                image_paths=image_paths,
+                labels_per_entity=labels_per_entity,
+                assets_dir=assets_dir,
+            )
+            t_render = int((time.time() - t_render_start) * 1000)
+
+            assets_obj = schemas.Assets(
+                png_url=f"/assets/{out_png}",
+                pdf_url=f"/assets/{out_pdf}",
+                image_files=image_paths,
+            )
+            return schemas.GenerateResponse(
+                assets=assets_obj,
+                timings_ms=schemas.Timings(images=t_images, render=t_render)
+            )
+
+        except Exception as err:
+            last_error = err
+            logger.warning(
+                "[orchestrator] Image generation attempt %s failed: %s",
+                attempt,
+                err,
+            )
+
+            # Clean up partial images
+            for path in image_paths:
+                try:
+                    (assets / path).unlink(missing_ok=True)
+                except Exception:
+                    logger.debug("[orchestrator] Failed to cleanup partial image %s", path)
+
+            if job_id and job_id in _generation_status:
+                _generation_status[job_id].message = "הייתה תקלה ביצירת התמונות, מנסה שוב..." if attempt < max_attempts else "הייתה תקלה זמנית ביצירת התמונות." 
+
+            if attempt == max_attempts:
+                logger.exception("[orchestrator] Image generation failed after retries")
+                if job_id and job_id in _generation_status:
+                    _generation_status[job_id].status = "error"
+                    _generation_status[job_id].message = "יצירת התמונות נכשלה זמנית. נסה שוב בעוד רגע."
+                raise RuntimeError("יצירת התמונות נכשלה זמנית. נסה שוב בעוד רגע.") from err
+
+            time.sleep(1)
+            t_images_start = time.time()
+            continue
+
 
 
