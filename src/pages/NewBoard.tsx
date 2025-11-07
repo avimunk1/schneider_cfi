@@ -178,6 +178,8 @@ export default function NewBoard() {
     religion: "לא דתי",
   });
   const [showProfileForm, setShowProfileForm] = useState(false);
+  const [profileWasModified, setProfileWasModified] = useState(false); // Track if user opened the form
+  const [isEditingAfterPreview, setIsEditingAfterPreview] = useState(false); // Track if user clicked "edit" after preview
   const pollingRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -201,6 +203,7 @@ export default function NewBoard() {
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
+    setIsEditingAfterPreview(false); // Reset edit mode when sending new message
     setUiState("thinking");
     
     try {
@@ -211,7 +214,7 @@ export default function NewBoard() {
       }));
       
       const req: PreviewRequest = {
-        patient_profile: patientProfile,
+        patient_profile: profileWasModified ? patientProfile : {},  // Only send profile if user opened the form
         board_description: input,
         preferences: {},  // Let LLM decide layout based on user request
         conversation_history: conversationHistory,
@@ -342,6 +345,18 @@ export default function NewBoard() {
     }
   };
 
+  const startNewConversation = () => {
+    setMessages([
+      { role: "agent", text: "שלום! אני הסוכן שלך ליצירת לוח תקשורת.\n\nבואו נתחיל - ספר/י לי על הלוח שאת/ה צריך/ה, ואני אשאל שאלות הבהרה לפי הצורך." },
+    ]);
+    setInput("");
+    setPreview(null);
+    setAssets(null);
+    setGeneratedBoard(null);
+    setIsEditingAfterPreview(false);
+    setUiState("idle");
+  };
+
   // Quick test with existing images
   const [testImageCount, setTestImageCount] = useState<number>(4);
   
@@ -371,7 +386,12 @@ export default function NewBoard() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">סוכן יצירת לוח חדש</h1>
         <button
-          onClick={() => setShowProfileForm(!showProfileForm)}
+          onClick={() => {
+            setShowProfileForm(!showProfileForm);
+            if (!showProfileForm) {
+              setProfileWasModified(true); // Mark as modified when opened
+            }
+          }}
           className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md"
         >
           {showProfileForm ? "הסתר" : "פרטי מטופל"}
@@ -521,6 +541,7 @@ export default function NewBoard() {
                 <button
                   onClick={() => {
                     setPreview(null);
+                    setIsEditingAfterPreview(true);
                     setMessages((m) => [...m, { role: "agent", text: "בסדר, מה תרצה לשנות?" }]);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
@@ -541,29 +562,35 @@ export default function NewBoard() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area - Hide during generation */}
-      {uiState !== "generating" && (
-        <div className="flex gap-2">
-        <input
-          className="flex-1 border rounded-md p-2"
-          placeholder="תאר/י את הלוח הנדרש או שנה/י את הבקשה..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={uiState !== "idle"}
-        />
-        <button 
-          className="px-4 py-2 bg-purple-600 text-white rounded-md disabled:bg-gray-400" 
-          onClick={send} 
-          disabled={uiState !== "idle" || !input.trim()}
-        >
-          שלח
-        </button>
-        </div>
-      )}
+      {/* Input Area - Hide during generation and when preview buttons are shown (unless user clicked edit) */}
+      {(() => {
+        const lastMessage = messages[messages.length - 1];
+        const showingPreviewButtons = lastMessage?.role === "agent" && preview && uiState === "idle" && !assets && lastMessage.text.includes("הבנתי");
+        const shouldShowInput = uiState !== "generating" && (!showingPreviewButtons || isEditingAfterPreview);
+        
+        return shouldShowInput && (
+          <div className="flex gap-2">
+          <input
+            className="flex-1 border rounded-md p-2"
+            placeholder="תאר/י את הלוח הנדרש או שנה/י את הבקשה..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={uiState !== "idle"}
+          />
+          <button 
+            className="px-4 py-2 bg-purple-600 text-white rounded-md disabled:bg-gray-400" 
+            onClick={send} 
+            disabled={uiState !== "idle" || !input.trim()}
+          >
+            שלח
+          </button>
+          </div>
+        );
+      })()}
 
-      {/* Title edit - only show when preview exists but before generation starts */}
-      {preview && uiState === "idle" && !assets && (
+      {/* Title edit - Hidden for now (not in use) */}
+      {false && preview && uiState === "idle" && !assets && (
         <div className="border rounded-lg p-3 bg-blue-50">
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium">כותרת הלוח:</label>
@@ -583,13 +610,22 @@ export default function NewBoard() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold">הלוח שלך מוכן!</h2>
-            <button 
-              onClick={downloadPNG}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Lucide.Download className="w-4 h-4" />
-              הורד כ-PNG
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={downloadPNG}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Lucide.Download className="w-4 h-4" />
+                הורד כ-PNG
+              </button>
+              <button 
+                onClick={startNewConversation}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+              >
+                <Lucide.Plus className="w-4 h-4" />
+                שיחה חדשה
+              </button>
+            </div>
           </div>
 
           {/* A4 Frame Board */}

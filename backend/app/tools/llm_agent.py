@@ -41,22 +41,17 @@ CRITICAL RESPONSE STYLE:
 - Use FUTURE tense: "אצור לך" (I will create), NOT past tense "יצרתי" (I created)
 - Start with "הבנתי" (I understood) to acknowledge the request
 - EXPLICITLY list ALL the items that will be in the board
-- CLEARLY state what profile info was provided and what's missing
-- For missing info, state the DEFAULT that will be used: "לא ציינת גיל - אשתמש בברירת מחדל: 10 שנים"
-- End with clarifying questions about missing info
+- If patient profile IS provided: CLEARLY list the profile info with checkmarks (✓)
+- If patient profile NOT provided: Don't mention it at all - just focus on the board
+- End with simple confirmation: "האם להתחיל ביצירת הלוח?"
 
-Example Hebrew response when profile is incomplete:
+Example Hebrew response when NO profile provided:
 "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים:
 - פעלים (3): לאכול, לשתות, לרצות
 - תארים (3): חם, קר, טוב
 - שמות גוף (3): אני, אתה, הוא
 
-פרטי מטופל:
-• גיל: לא צוין - אשתמש בברירת מחדל של 10 שנים
-• מגדר: לא צוין - אשתמש בברירת מחדל 'ילד'
-• קורא/ת: לא צוין - אשתמש בתמונות ריאליסטיות (מתאים למי שלא קורא)
-
-האם תרצה לציין את הפרטים האלה?"
+האם להתחיל ביצירת הלוח?"
 
 Example when profile IS provided:
 "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים: לחם, חלב, ביצה, לאכול, לשתות, לרצות, חם, קר, טוב.
@@ -99,12 +94,28 @@ Examples:
   → reasoning: "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים:\n- פעלים (3): לאכול, לשתות, לרצות\n- תארים (3): חם, קר, טוב\n- שמות גוף (3): אני, אתה, הוא\n\nלא ציינת את גיל המטופל. האם זה ילד או מבוגר? גם לא ציינת האם הוא/היא קוראים - האם ליצור תמונות מפורשות או אייקונים?"
 """
 
-    user_msg = f"""Patient profile: {json.dumps(patient_profile, ensure_ascii=False)}
+    # Check if patient profile has any meaningful data
+    has_profile = patient_profile and any(
+        patient_profile.get(k) is not None 
+        for k in ['age', 'gender', 'language', 'can_read', 'religion', 'sector']
+    )
+    
+    if has_profile:
+        user_msg = f"""Patient profile: {json.dumps(patient_profile, ensure_ascii=False)}
 
 Conversation history:
 {conversation_history}
 
 Latest user message: {board_description}
+
+Provide your analysis as JSON."""
+    else:
+        user_msg = f"""Conversation history:
+{conversation_history}
+
+Latest user message: {board_description}
+
+Note: No patient profile provided. Create board with default settings.
 
 Provide your analysis as JSON."""
 
@@ -128,39 +139,53 @@ def build_image_prompts(entities: List[str], patient_profile: Dict, image_style:
     """
     client = _get_client()
     
-    age = patient_profile.get("age", 10)
-    gender = patient_profile.get("gender", "child")
-    religion = patient_profile.get("religion", "")  # דתי/לא דתי
-    sector = patient_profile.get("sector", "")  # מוסלמי/חרדי/דתי etc
+    # Check if patient profile has meaningful data
+    has_profile = patient_profile and any(
+        patient_profile.get(k) is not None 
+        for k in ['age', 'gender', 'religion', 'sector']
+    )
     
-    # Build cultural context
-    cultural_context = ""
-    if sector:
-        if sector == "מוסלמי":
-            cultural_context = "Muslim family with appropriate modest clothing (hijab for women/girls, traditional dress)"
-        elif sector == "חרדי":
-            cultural_context = "Ultra-Orthodox Jewish family with traditional dress (women in modest clothing, men with kippa/hat)"
-        elif sector == "דתי":
-            cultural_context = "Religious Jewish family with appropriate dress (women in modest clothing, men with kippa)"
-        elif sector == "נוצרי":
-            cultural_context = "Christian Arab family with appropriate cultural context"
-        elif sector == "דרוזי":
-            cultural_context = "Druze family with appropriate cultural dress"
-        else:
-            cultural_context = f"{sector} family with culturally appropriate representation"
-    
-    system_prompt = f"""You are an expert at creating image generation prompts for communication boards.
-
+    # Build profile context section only if data exists
+    if has_profile:
+        age = patient_profile.get("age", 10)
+        gender = patient_profile.get("gender", "child")
+        religion = patient_profile.get("religion", "")  # דתי/לא דתי
+        sector = patient_profile.get("sector", "")  # מוסלמי/חרדי/דתי etc
+        
+        # Build cultural context
+        cultural_context = ""
+        if sector:
+            if sector == "מוסלמי":
+                cultural_context = "Muslim family with appropriate modest clothing (hijab for women/girls, traditional dress)"
+            elif sector == "חרדי":
+                cultural_context = "Ultra-Orthodox Jewish family with traditional dress (women in modest clothing, men with kippa/hat)"
+            elif sector == "דתי":
+                cultural_context = "Religious Jewish family with appropriate dress (women in modest clothing, men with kippa)"
+            elif sector == "נוצרי":
+                cultural_context = "Christian Arab family with appropriate cultural context"
+            elif sector == "דרוזי":
+                cultural_context = "Druze family with appropriate cultural dress"
+            else:
+                cultural_context = f"{sector} family with culturally appropriate representation"
+        
+        profile_section = f"""
 Patient context:
 - Age: {age}
 - Gender: {gender}
 - Cultural background: {sector if sector else "not specified"}
 - Religious: {religion if religion else "not specified"}
-- Style needed: {image_style}
-- Board context: {board_context if board_context else "general"}
 
 CRITICAL CULTURAL SENSITIVITY:
 {cultural_context if cultural_context else "Use culturally neutral representation"}
+"""
+    else:
+        # No profile provided - don't mention patient context at all
+        profile_section = ""
+    
+    system_prompt = f"""You are an expert at creating image generation prompts for communication boards.
+{profile_section}
+- Style needed: {image_style}
+- Board context: {board_context if board_context else "general"}
 
 CRITICAL: Images must be CONTEXTUAL to the board topic AND culturally appropriate!
 
