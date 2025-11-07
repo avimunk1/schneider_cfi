@@ -220,12 +220,12 @@ export default function NewBoard() {
       const p = await api.preview(req);
       setPreview(p);
       
-      // Add agent response with confirmation question
+      // Add agent response (buttons will appear if message includes "הבנתי")
       setMessages((m) => [
         ...m,
         {
           role: "agent",
-          text: `${p.summary}\n\nהאם תרצה שאתחיל ליצור את הלוח?`,
+          text: p.summary,
         },
       ]);
     } catch (e: any) {
@@ -509,8 +509,8 @@ export default function NewBoard() {
             <span className="font-medium">{m.role === "agent" ? "🤖 סוכן" : "👤 את/ה"}:</span>{" "}
             <span className="whitespace-pre-wrap">{m.text}</span>
             
-            {/* Show YES/NO buttons after the last agent message if preview is ready */}
-            {m.role === "agent" && i === messages.length - 1 && preview && uiState === "idle" && !assets && (
+            {/* Show YES/NO buttons after the last agent message if preview is ready AND agent confirmed understanding */}
+            {m.role === "agent" && i === messages.length - 1 && preview && uiState === "idle" && !assets && m.text.includes("הבנתי") && (
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={startGeneration}
