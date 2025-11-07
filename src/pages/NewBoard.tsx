@@ -325,16 +325,47 @@ export default function NewBoard() {
   const downloadPNG = async () => {
     if (!boardRef.current) return;
     try {
+      // Store original styles
+      const originalOverflow = boardRef.current.style.overflow;
+      const originalWidth = boardRef.current.style.width;
+      const originalMaxWidth = boardRef.current.style.maxWidth;
+      
+      // Temporarily set styles for capture
+      boardRef.current.style.overflow = 'visible';
+      boardRef.current.style.width = '794px';
+      boardRef.current.style.maxWidth = '794px';
+      
+      // Wait for layout to settle
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const dataUrl = await htmlToImage.toPng(boardRef.current, {
         quality: 1.0,
         pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        width: 794,
+        height: boardRef.current.scrollHeight, // Capture full height
+        style: {
+          overflow: 'visible'
+        }
       });
+      
+      // Restore original styles
+      boardRef.current.style.overflow = originalOverflow;
+      boardRef.current.style.width = originalWidth;
+      boardRef.current.style.maxWidth = originalMaxWidth;
+      
       const link = document.createElement("a");
       link.download = `${title || "communication-board"}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
       console.error("Failed to download PNG:", err);
+      // Restore styles on error
+      if (boardRef.current) {
+        boardRef.current.style.overflow = '';
+        boardRef.current.style.width = '';
+        boardRef.current.style.maxWidth = '';
+      }
     }
   };
 
@@ -640,10 +671,9 @@ export default function NewBoard() {
           {/* A4 Frame Board */}
           <div 
             ref={boardRef}
-            className="bg-white rounded-lg shadow-lg p-4 sm:p-8 mx-auto w-full sm:w-auto overflow-x-auto"
+            className="bg-white rounded-lg shadow-lg p-4 sm:p-8 mx-auto w-full sm:w-auto"
             style={{ 
-              maxWidth: '794px', 
-              aspectRatio: '1 / 1.414',
+              maxWidth: '794px',
               direction: 'rtl'
             }}
           >
