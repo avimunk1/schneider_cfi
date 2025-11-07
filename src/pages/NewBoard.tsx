@@ -526,7 +526,16 @@ export default function NewBoard() {
       <div className="border rounded-lg p-4 bg-white space-y-3 max-h-[500px] overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === "agent" ? "text-purple-800" : "text-gray-800"}>
-            <span className="font-medium">{m.role === "agent" ? "🤖 סוכן" : "👤 את/ה"}:</span>{" "}
+            <span className="font-medium inline-flex items-center gap-1">
+              {m.role === "agent" ? (
+                <>
+                  <img src="/PS_icon.png" alt="Agent" className="w-5 h-5 inline-block" />
+                  <span>סוכן</span>
+                </>
+              ) : (
+                "👤 את/ה"
+              )}:
+            </span>{" "}
             <span className="whitespace-pre-wrap">{m.text}</span>
             
             {/* Show YES/NO buttons after the last agent message if preview is ready AND agent confirmed understanding */}
