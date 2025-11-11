@@ -609,7 +609,7 @@ export default function NewBoard() {
       </div>
 
       {/* Quick Test Section - Only show if enabled via env variable */}
-      {(import.meta.env.VITE_SHOW_TEST_FEATURES === 'true' || true) && (
+      {import.meta.env.VITE_SHOW_TEST_FEATURES === 'true' && (
         <div className="border rounded-lg p-4 bg-green-50 space-y-3">
           <h3 className="font-medium text-green-900">🧪 בדיקה מהירה - תמונות קיימות</h3>
           <div className="flex items-center gap-3">
