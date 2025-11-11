@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..logger import logger
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -38,9 +40,12 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 KPI_FILE = LOG_DIR / "conversation_kpis.csv"
 DETAIL_FILE = LOG_DIR / "conversation_details.ndjson"
+FEEDBACK_FILE = LOG_DIR / "user_feedback.csv"
 
 MAX_BYTES = int(os.getenv("SESSION_LOG_MAX_BYTES", 50 * 1024 * 1024))
 EXPIRE_SECONDS = int(os.getenv("SESSION_LOG_IDLE_FLUSH_SECONDS", 30 * 60))
+
+FEEDBACK_HEADERS = ["timestamp", "session_id", "rating", "comment"]
 
 CSV_HEADERS = [
     "session_id",
@@ -327,4 +332,42 @@ def finalize_session(session_id: str) -> None:
         session = _sessions.pop(session_id, None)
     if session:
         write_session(session)
+
+
+def record_feedback(session_id: str, rating: int, comment: Optional[str]) -> None:
+    """
+    Record user feedback to separate feedback log.
+    This can be called even after session is finalized.
+    """
+    now = _utcnow()
+    
+    # Rotate feedback file if needed
+    _maybe_rotate(FEEDBACK_FILE)
+    
+    # Write to feedback CSV
+    feedback_row = {
+        "timestamp": _iso(now),
+        "session_id": session_id,
+        "rating": rating,
+        "comment": comment or "",
+    }
+    
+    with _lock:
+        file_exists = FEEDBACK_FILE.exists()
+        with open(FEEDBACK_FILE, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FEEDBACK_HEADERS)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(feedback_row)
+    
+    logger.info("Feedback recorded", session_id=session_id, rating=rating)
+    
+    # Also append to NDJSON detail log for completeness
+    detail_entry = {
+        "timestamp": _iso(now),
+        "session_id": session_id,
+        "event": "user_feedback",
+        "data": {"rating": rating, "comment": comment},
+    }
+    _write_ndjson(detail_entry)
 

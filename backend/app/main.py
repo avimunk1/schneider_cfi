@@ -2,6 +2,7 @@ import os
 import time
 import uuid
 import threading
+import traceback
 from pathlib import Path
 from typing import Dict
 from fastapi import FastAPI, HTTPException
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import schemas
 from . import orchestrator
+from .logger import logger
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,10 +47,10 @@ def healthz():
 def api_preview(req: schemas.PreviewRequest):
     request_id = uuid.uuid4().hex[:8]
     try:
-        print(f"[preview] request_id={request_id}")
+        logger.info("Preview request", request_id=request_id, session_id=req.session_id)
         return orchestrator.handle_preview(req)
     except Exception as e:
-        print(f"[preview] request_id={request_id} error={e}")
+        logger.error("Preview request failed", request_id=request_id, error=str(e), exc_info=True)
         detail = {"message": str(e), "request_id": request_id}
         session_id = getattr(e, "session_id", None) or req.session_id
         if session_id:
@@ -63,10 +65,10 @@ def api_generate(req: schemas.GenerateRequest):
     if not req.session_id:
         req = req.copy(update={"session_id": session_id})
     try:
-        print(f"[generate] request_id={request_id}")
+        logger.info("Generate request", request_id=request_id, session_id=session_id)
         return orchestrator.handle_generate(req, assets_dir=str(ASSETS_DIR))
     except Exception as e:
-        print(f"[generate] request_id={request_id} error={e}")
+        logger.error("Generate request failed", request_id=request_id, session_id=session_id, error=str(e), exc_info=True)
         detail = {"message": str(e), "request_id": request_id}
         detail["session_id"] = getattr(e, "session_id", session_id)
         raise HTTPException(status_code=400, detail=detail)
@@ -106,9 +108,7 @@ def api_generate_start(req: schemas.GenerateRequest):
                 # We'll need to store assets separately
                 _generation_status[f"{job_id}_assets"] = result.assets
         except Exception as e:
-            import traceback
-            print(f"[generate_async] job_id={job_id} error={e}")
-            print(f"[generate_async] traceback:\n{traceback.format_exc()}")
+            logger.error("Async generation failed", job_id=job_id, error=str(e), exc_info=True)
             if job_id in _generation_status:
                 _generation_status[job_id].status = "error"
                 _generation_status[job_id].message = f"שגיאה: {str(e)}"
@@ -131,5 +131,24 @@ def api_generate_status(job_id: str):
         assets = _generation_status[f"{job_id}_assets"]
     
     return schemas.ProgressResponse(progress=progress, assets=assets)
+
+
+@app.post("/api/feedback")
+def api_feedback(req: schemas.FeedbackRequest):
+    """Record user feedback for a session"""
+    request_id = uuid.uuid4().hex[:8]
+    logger.info("Feedback received", request_id=request_id, session_id=req.session_id, rating=req.rating)
+    
+    try:
+        from .tools import conversation_logger
+        conversation_logger.record_feedback(
+            session_id=req.session_id,
+            rating=req.rating,
+            comment=req.comment
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error("Feedback submission failed", request_id=request_id, error=str(e), exc_info=True)
+        raise HTTPException(status_code=400, detail={"message": str(e), "request_id": request_id})
 
 

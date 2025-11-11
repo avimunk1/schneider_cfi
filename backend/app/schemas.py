@@ -126,3 +126,9 @@ class GenerateStartResponse(BaseModel):
     user_name: Optional[str] = None
 
 
+class FeedbackRequest(BaseModel):
+    session_id: str
+    rating: int = Field(..., ge=1, le=5, description="Star rating 1-5")
+    comment: Optional[str] = Field(None, max_length=1000, description="Optional text feedback")
+
+

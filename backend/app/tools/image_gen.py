@@ -6,6 +6,8 @@ from typing import List, Dict, Optional
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
 
+from ..logger import logger
+
 
 def _safe_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     try:
@@ -44,30 +46,30 @@ def _generate_with_gemini(entity: str, prompt_text: str, assets: Path, prefix: O
     """Try Gemini image generation"""
     api_key = os.getenv("GOOGLE_GENAI_API_KEY")
     if not api_key:
-        print(f"[image_gen] No API key for {entity}")
+        logger.warning("No Gemini API key found", entity=entity)
         return None
 
     try:
-        print(f"[image_gen] Generating {entity} with prompt: {prompt_text[:100]}...")
+        logger.info("Generating image with Gemini", entity=entity, prompt_preview=prompt_text[:100])
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.5-flash-image",
             contents=[{"role": "user", "parts": [{"text": prompt_text}]}],
         )
 
-        print(f"[image_gen] Raw response type: {type(response)}")
+        logger.debug("Gemini response received", response_type=str(type(response)))
         
         # Extract inline image data if available
         if response and response.candidates:
-            print(f"[image_gen] Found {len(response.candidates)} candidates")
+            logger.debug("Processing candidates", candidate_count=len(response.candidates))
             candidate = response.candidates[0]
-            print(f"[image_gen] Candidate content parts: {len(candidate.content.parts)}")
+            logger.debug("Candidate parts", parts_count=len(candidate.content.parts))
             
             for i, part in enumerate(candidate.content.parts):
                 if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
                     # Check if data is already bytes or needs decoding
                     raw_data = part.inline_data.data
-                    print(f"[image_gen] Data type: {type(raw_data)}, first bytes: {raw_data[:20] if isinstance(raw_data, bytes) else 'not bytes'}")
+                    logger.debug("Image data found", data_type=str(type(raw_data)))
                     
                     if isinstance(raw_data, bytes):
                         img_data = raw_data
@@ -77,13 +79,13 @@ def _generate_with_gemini(entity: str, prompt_text: str, assets: Path, prefix: O
                     filename = f"{_sanitize_prefix(prefix)}img_{uuid.uuid4().hex[:8]}.png"
                     with open(assets / filename, "wb") as f:
                         f.write(img_data)
-                    print(f"[image_gen] SUCCESS: {entity} -> {filename} ({len(img_data)} bytes)")
+                    logger.success("Image generated successfully", entity=entity, filename=filename, size_bytes=len(img_data))
                     return filename
                     
-        print(f"[image_gen] No image data in response for {entity}")
+        logger.warning("No image data in Gemini response", entity=entity)
         return None
     except Exception as e:
-        print(f"[image_gen] Gemini failed for {entity}: {e}")
+        logger.error("Gemini image generation failed", entity=entity, error=str(e), exc_info=True)
         return None
 
 

@@ -190,6 +190,9 @@ export default function NewBoard() {
   const [showProfileForm, setShowProfileForm] = useState(true); // Open by default
   const [profileWasModified, setProfileWasModified] = useState(false); // Track if user actually changed any field
   const [isEditingAfterPreview, setIsEditingAfterPreview] = useState(false); // Track if user clicked "edit" after preview
+  const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState<string>("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -508,6 +511,25 @@ export default function NewBoard() {
     setIsEditingAfterPreview(false);
     setUiState("idle");
     setSessionId(null);
+    setFeedbackRating(null);
+    setFeedbackComment("");
+    setFeedbackSubmitted(false);
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackRating || !sessionId) return;
+    
+    try {
+      await api.submitFeedback({
+        session_id: sessionId,
+        rating: feedbackRating,
+        comment: feedbackComment || undefined,
+      });
+      setFeedbackSubmitted(true);
+    } catch (error) {
+      console.error("Failed to submit feedback:", error);
+      alert("שגיאה בשליחת המשוב. אנא נסה שוב.");
+    }
   };
 
   // Quick test with existing images
@@ -846,25 +868,7 @@ export default function NewBoard() {
       {/* Generated Board Display - Show when completed */}
       {generatedBoard && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <h2 className="text-lg sm:text-xl font-bold">הלוח שלך מוכן!</h2>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <button 
-                onClick={downloadPNG}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Lucide.Download className="w-4 h-4" />
-                הורד כ-PNG
-              </button>
-              <button 
-                onClick={startNewConversation}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Lucide.Plus className="w-4 h-4" />
-                שיחה חדשה
-              </button>
-            </div>
-          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-center">הלוח שלך מוכן!</h2>
 
           {/* A4 Frame Board - Container with scroll */}
           <div 
@@ -963,11 +967,91 @@ export default function NewBoard() {
             </div>
           </div>
 
-          {/* Backend PDF Link (alternative) */}
+          {/* Action Buttons - Moved here below the board */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={downloadPNG}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 font-medium w-full sm:w-auto"
+            >
+              <Lucide.Download className="w-5 h-5" />
+              הורד כ-PNG
+            </button>
+            <button 
+              onClick={startNewConversation}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium w-full sm:w-auto"
+            >
+              <Lucide.Plus className="w-5 h-5" />
+              שיחה חדשה
+            </button>
+          </div>
+
+          {/* User Feedback Section */}
+          {!feedbackSubmitted ? (
+            <div className="border rounded-lg p-4 sm:p-6 bg-blue-50 space-y-4">
+              <h3 className="font-medium text-blue-900 text-center text-lg">
+                איך היה הלוח? נשמח למשוב שלך 😊
+              </h3>
+              
+              {/* Star Rating */}
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-sm text-gray-600">דרג את הלוח:</span>
+                <div className="flex gap-2">
+                  {[5, 4, 3, 2, 1].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setFeedbackRating(star)}
+                      className="text-4xl transition-all hover:scale-110 focus:outline-none"
+                      title={`${star} כוכבים`}
+                      type="button"
+                    >
+                      {feedbackRating && star <= feedbackRating ? '⭐' : '☆'}
+                    </button>
+                  ))}
+                </div>
+                {feedbackRating && (
+                  <div className="text-center text-sm text-gray-600 font-medium">
+                    בחרת: {feedbackRating} מתוך 5 כוכבים
+                  </div>
+                )}
+              </div>
+              
+              {/* Comment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
+                  הערות נוספות (אופציונלי)
+                </label>
+                <textarea
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="מה היה טוב? מה אפשר לשפר?"
+                  className="w-full border border-gray-300 rounded-md p-3 min-h-[100px] text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  dir="rtl"
+                />
+              </div>
+              
+              {/* Submit Button */}
+              <button
+                onClick={handleFeedbackSubmit}
+                disabled={!feedbackRating}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+                type="button"
+              >
+                {feedbackRating ? 'שלח משוב' : 'אנא בחר דירוג תחילה'}
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-green-50 rounded-lg border border-green-200">
+              <div className="text-4xl mb-2">✓</div>
+              <div className="text-green-700 font-medium text-lg">תודה רבה על המשוב!</div>
+              <div className="text-sm text-green-600 mt-1">המשוב שלך עוזר לנו להשתפר</div>
+            </div>
+          )}
+
+          {/* Backend PDF Link - Stays at bottom */}
           {assets && (
-            <div className="text-center">
+            <div className="text-center pt-4 border-t border-gray-200">
               <a 
-                className="text-blue-600 underline hover:text-blue-800" 
+                className="text-sm text-blue-600 underline hover:text-blue-800" 
                 href={`${import.meta.env.VITE_API_BASE_URL || ""}${assets.pdf_url}`}
                 target="_blank"
                 rel="noreferrer"

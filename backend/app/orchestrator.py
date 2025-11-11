@@ -1,5 +1,4 @@
 import time
-import logging
 import uuid
 from typing import Dict
 
@@ -10,9 +9,7 @@ from .tools.checker import validate_requirements
 from .tools.labels import generate_labels
 from .tools.render import render_board
 from .tools import conversation_logger
-
-
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 
 def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
@@ -149,11 +146,13 @@ def handle_generate(req: schemas.GenerateRequest, assets_dir: str, job_id: str =
                 req.profile.image_style,
                 board_context
             )
-            print(f"[orchestrator] Got {len(prompts)} prompts from LLM (context: {board_context}, profile: age={working_profile.get('age')}, gender={working_profile.get('gender')})")
+            logger.info("LLM prompts generated", 
+                       prompt_count=len(prompts),
+                       board_context=board_context, 
+                       profile_age=working_profile.get('age'), 
+                       profile_gender=working_profile.get('gender'))
         except Exception as e:
-            import traceback
-            print(f"[orchestrator] LLM prompt building failed: {e}")
-            print(f"[orchestrator] Traceback: {traceback.format_exc()}")
+            logger.error("LLM prompt building failed", error=str(e), exc_info=True)
             conversation_logger.record_error(session_id, "prompt_building", str(e))
             # Fallback to simple prompts
             prompts = [{"entity": ent, "prompt": f"A realistic {ent} on white background"} for ent in req.parsed.entities]

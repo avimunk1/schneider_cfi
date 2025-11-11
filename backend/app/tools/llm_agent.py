@@ -4,6 +4,8 @@ from typing import Dict, Any, List
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from ..logger import logger
+
 
 # Pydantic models for structured image prompt generation
 class ImagePrompt(BaseModel):
@@ -256,7 +258,7 @@ You must return a list of prompts, one for each entity provided.
         temperature=0.7,
     )
     
-    print(f"[llm_agent] OpenAI response: {response.choices[0].message.content}")
+    logger.debug("OpenAI response received", response_preview=response.choices[0].message.content[:200])
     
     # Parse using Pydantic for guaranteed structure
     parsed = ImagePromptsResponse.model_validate_json(response.choices[0].message.content)
@@ -264,6 +266,6 @@ You must return a list of prompts, one for each entity provided.
     # Convert to the expected format
     prompts = [{"entity": p.entity, "prompt": p.prompt} for p in parsed.prompts]
     
-    print(f"[llm_agent] Extracted {len(prompts)} prompts")
+    logger.info("Image prompts extracted", prompt_count=len(prompts))
     return prompts
 

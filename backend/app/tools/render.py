@@ -8,6 +8,8 @@ from reportlab.lib.pagesizes import A5
 from bidi.algorithm import get_display
 import arabic_reshaper
 
+from ..logger import logger
+
 
 def _grid_for_layout(layout: str) -> Tuple[int, int]:
     if layout == "2x4":
@@ -37,13 +39,13 @@ def _safe_font(size: int):
     for font_path in font_options:
         try:
             font = ImageFont.truetype(font_path, size)
-            print(f"[render] Loaded font: {font_path}")
+            logger.debug("Font loaded", font_path=font_path, size=size)
             return font
         except (OSError, IOError):
             continue
     
     # Fallback to default (may not support Hebrew)
-    print(f"[render] Warning: Could not load Hebrew-compatible font, using default")
+    logger.warning("Could not load Hebrew-compatible font, using default")
     return ImageFont.load_default()
 
 
@@ -68,7 +70,7 @@ def _prepare_text_for_display(text: str) -> str:
             return get_display(reshaped)
         except Exception as e:
             # Fallback: simple reversal for pure Hebrew
-            print(f"[render] BiDi processing failed: {e}, using simple reversal")
+            logger.warning("BiDi processing failed, using simple reversal", error=str(e))
             return text[::-1]
     
     return text

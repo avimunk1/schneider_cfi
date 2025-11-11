@@ -64,6 +64,12 @@ export type ProgressResponse = {
   assets?: { png_url: string; pdf_url: string; image_files?: string[] };
 };
 
+export type FeedbackRequest = {
+  session_id: string;
+  rating: number;
+  comment?: string;
+};
+
 // In local dev: empty string → uses Vite proxy (/api → localhost:8000)
 // In production: Railway backend URL from environment variable
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -96,6 +102,9 @@ export const api = {
   generate: (req: GenerateRequest) => http<GenerateResponse>("/api/boards/generate", "POST", req),
   generateStart: (req: GenerateRequest) => http<GenerateStartResponse>("/api/boards/generate/start", "POST", req),
   generateStatus: (jobId: string) => http<ProgressResponse>(`/api/boards/generate/status/${jobId}`, "GET"),
+  submitFeedback: async (req: FeedbackRequest): Promise<void> => {
+    await http<{ status: string }>("/api/feedback", "POST", req);
+  },
 };
 
 
