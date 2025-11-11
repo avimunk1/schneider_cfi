@@ -2,7 +2,7 @@ import os
 import uuid
 import base64
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
 
@@ -14,7 +14,16 @@ def _safe_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         return ImageFont.load_default()
 
 
-def _generate_placeholder(entity: str, assets: Path) -> str:
+def _sanitize_prefix(prefix: Optional[str]) -> str:
+    if not prefix:
+        return ""
+    safe = "".join(ch for ch in str(prefix) if ch.isalnum() or ch in {"-", "_"})
+    if safe and not safe.endswith("_"):
+        safe = f"{safe}_"
+    return safe
+
+
+def _generate_placeholder(entity: str, assets: Path, prefix: Optional[str] = None) -> str:
     """Fallback placeholder image"""
     img = Image.new("RGB", (512, 512), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
@@ -26,12 +35,12 @@ def _generate_placeholder(entity: str, assets: Path) -> str:
     draw.rectangle([10, 10, 502, 502], outline=(30, 30, 30), width=4)
     draw.text(((512 - tw) / 2, (512 - th) / 2), text, fill=(20, 20, 20), font=font, align="center")
 
-    filename = f"img_{uuid.uuid4().hex[:8]}.png"
+    filename = f"{_sanitize_prefix(prefix)}img_{uuid.uuid4().hex[:8]}.png"
     img.save(assets / filename)
     return filename
 
 
-def _generate_with_gemini(entity: str, prompt_text: str, assets: Path) -> str | None:
+def _generate_with_gemini(entity: str, prompt_text: str, assets: Path, prefix: Optional[str] = None) -> str | None:
     """Try Gemini image generation"""
     api_key = os.getenv("GOOGLE_GENAI_API_KEY")
     if not api_key:
@@ -65,7 +74,7 @@ def _generate_with_gemini(entity: str, prompt_text: str, assets: Path) -> str | 
                     else:
                         img_data = base64.b64decode(raw_data)
                     
-                    filename = f"img_{uuid.uuid4().hex[:8]}.png"
+                    filename = f"{_sanitize_prefix(prefix)}img_{uuid.uuid4().hex[:8]}.png"
                     with open(assets / filename, "wb") as f:
                         f.write(img_data)
                     print(f"[image_gen] SUCCESS: {entity} -> {filename} ({len(img_data)} bytes)")
@@ -78,7 +87,7 @@ def _generate_with_gemini(entity: str, prompt_text: str, assets: Path) -> str | 
         return None
 
 
-def generate_images(prompts: List[Dict], assets_dir: str) -> List[str]:
+def generate_images(prompts: List[Dict], assets_dir: str, prefix: Optional[str] = None) -> List[str]:
     out_paths: List[str] = []
     assets = Path(assets_dir)
     assets.mkdir(parents=True, exist_ok=True)
@@ -88,10 +97,10 @@ def generate_images(prompts: List[Dict], assets_dir: str) -> List[str]:
         prompt_text = item.get("prompt", entity)
 
         # Try Gemini first
-        filename = _generate_with_gemini(entity, prompt_text, assets)
+        filename = _generate_with_gemini(entity, prompt_text, assets, prefix=prefix)
         if not filename:
             # Fallback to placeholder
-            filename = _generate_placeholder(entity, assets)
+            filename = _generate_placeholder(entity, assets, prefix=prefix)
 
         out_paths.append(filename)
 

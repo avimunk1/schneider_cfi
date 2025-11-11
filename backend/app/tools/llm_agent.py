@@ -2,6 +2,17 @@ import os
 import json
 from typing import Dict, Any, List
 from openai import OpenAI
+from pydantic import BaseModel, Field
+
+
+# Pydantic models for structured image prompt generation
+class ImagePrompt(BaseModel):
+    entity: str = Field(..., description="The entity name (e.g., 'מדונה', 'hot coffee')")
+    prompt: str = Field(..., description="Detailed image generation prompt for Gemini")
+
+
+class ImagePromptsResponse(BaseModel):
+    prompts: List[ImagePrompt] = Field(..., description="List of image generation prompts, one per entity")
 
 
 def _get_client():
@@ -66,6 +77,7 @@ Example when profile IS provided:
 Guidelines:
 - RECOGNIZE GREETINGS: If user just says greetings like "שלום", "בוקר טוב", "היי", "hello" WITHOUT a board request, respond with needs_clarification=true
 - ASK FOR TOPIC: When there's no clear board topic, ask: "שלום! איזה לוח תקשורת תרצה ליצור?" (Hello! What communication board would you like to create?)
+- if the user mentined infomation about the patient, use it to create the board. 
 - BE PROACTIVE: When user asks for verbs, adjectives, pronouns, or other word types, SUGGEST SPECIFIC ITEMS based on the context
 - NEVER ask "כמה פעלים/תארים?" (how many) - always decide and suggest concrete items
 - If user mentions categories (e.g., "פעלים ותארים"), suggest items with breakdown: "אני אשתמש ב-3 פעלים (לאכול, לשתות, לרצות) ו-3 תארים (חם, קר, טוב)"
@@ -200,44 +212,58 @@ For abstract concepts (verbs, adjectives, pronouns), show them IN CONTEXT:
 For each entity, create a detailed prompt optimized for Google's Gemini image generation that:
 - Describes a single, clear scene or object on white background
 - Uses {image_style} style (realistic/explicit if patient can't read; clean/friendly otherwise)
-- Is age-appropriate for {age} year old
+- Is age-appropriate for {patient_profile.get('age', 10)} year old
 - No text, logos, or watermarks in image
 - Explicit, recognizable representation (not icons or symbols)
 - ALWAYS relates abstract concepts to the board's context (breakfast, emotions, etc.)
+- If the image is related to a known public figure, use comics style in the prompt and the image should be a cartoon.
 
-Return JSON array:
-[
-  {{"entity": "entity_name", "prompt": "detailed contextual generation prompt"}},
-  ...
-]
+You must return a list of prompts, one for each entity provided.
 """
 
     user_msg = f"Create image prompts for these entities: {json.dumps(entities, ensure_ascii=False)}"
 
+    # Generate schema with additionalProperties: false for OpenAI strict mode
+    schema = ImagePromptsResponse.model_json_schema()
+    
+    def add_additional_properties_false(obj):
+        """Recursively add additionalProperties: false to all objects in schema"""
+        if isinstance(obj, dict):
+            if obj.get("type") == "object":
+                obj["additionalProperties"] = False
+            for value in obj.values():
+                add_additional_properties_false(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                add_additional_properties_false(item)
+    
+    add_additional_properties_false(schema)
+    
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg}
         ],
-        response_format={"type": "json_object"},
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "image_prompts_response",
+                "schema": schema,
+                "strict": True
+            }
+        },
         temperature=0.7,
     )
     
     print(f"[llm_agent] OpenAI response: {response.choices[0].message.content}")
-    result = json.loads(response.choices[0].message.content)
-    print(f"[llm_agent] Parsed result: {result}")
     
-    # Handle both array directly or wrapped in various keys
-    if isinstance(result, list):
-        return result
-    prompts = (
-        result.get("prompts")
-        or result.get("image_prompts")
-        or result.get("items")
-        or result.get("entities")
-        or []
-    )
-    print(f"[llm_agent] Extracted prompts: {prompts}")
+    # Parse using Pydantic for guaranteed structure
+    parsed = ImagePromptsResponse.model_validate_json(response.choices[0].message.content)
+    
+    # Convert to the expected format
+    prompts = [{"entity": p.entity, "prompt": p.prompt} for p in parsed.prompts]
+    
+    print(f"[llm_agent] Extracted {len(prompts)} prompts")
     return prompts
 

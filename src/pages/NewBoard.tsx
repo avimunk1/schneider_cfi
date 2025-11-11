@@ -3,7 +3,7 @@ import { api, PreviewRequest, ConversationMessage } from "@/lib/api";
 import * as htmlToImage from "html-to-image";
 import * as Lucide from "lucide-react";
 
-type AgentMessage = { role: "agent" | "user"; text: string };
+type AgentMessage = { role: "agent" | "user"; text: string; ts: string };
 type UIState = "idle" | "thinking" | "generating";
 type GeneratedBoard = {
   title: string;
@@ -21,6 +21,8 @@ type PatientProfile = {
   religion?: string;
   sector?: string;
 };
+
+const USER_NAME_STORAGE_KEY = "cfi_user_name";
 
 // Helper: Calculate optimal board layout
 function calculateBoardLayout(count: number) {
@@ -160,15 +162,23 @@ function generateAsymmetricSpiralPositions(rows: number, cols: number, count: nu
 }
 
 export default function NewBoard() {
-  const [messages, setMessages] = useState<AgentMessage[]>([
-    { role: "agent", text: "שלום! אני הסוכן שלך ליצירת לוח תקשורת.\n\nבואו נתחיל - ספר/י לי על הלוח שאת/ה צריך/ה, ואני אשאל שאלות הבהרה לפי הצורך." },
-  ]);
+  const createInitialAgentMessage = (): AgentMessage => ({
+    role: "agent",
+    text: "שלום! אני הסוכן שלך ליצירת לוח תקשורת.\n\nבואו נתחיל - ספר/י לי על הלוח שאת/ה צריך/ה, ואני אשאל שאלות הבהרה לפי הצורך.",
+    ts: new Date().toISOString(),
+  });
+
+  const [messages, setMessages] = useState<AgentMessage[]>([createInitialAgentMessage()]);
   const [input, setInput] = useState("");
   const [uiState, setUiState] = useState<UIState>("idle");
   const [preview, setPreview] = useState<any>(null);
   const [title, setTitle] = useState("לוח תקשורת מותאם");
   const [assets, setAssets] = useState<{ png_url: string; pdf_url: string } | null>(null);
   const [generatedBoard, setGeneratedBoard] = useState<GeneratedBoard | null>(null);
+  const [userName, setUserName] = useState<string>("");
+  const [pendingUserName, setPendingUserName] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showNameModal, setShowNameModal] = useState<boolean>(false);
   const [patientProfile, setPatientProfile] = useState<PatientProfile>({
     age: 50,
     gender: "גבר",
@@ -177,12 +187,49 @@ export default function NewBoard() {
     sector: "יהודי",
     religion: "לא דתי",
   });
-  const [showProfileForm, setShowProfileForm] = useState(false);
-  const [profileWasModified, setProfileWasModified] = useState(false); // Track if user opened the form
+  const [showProfileForm, setShowProfileForm] = useState(true); // Open by default
+  const [profileWasModified, setProfileWasModified] = useState(false); // Track if user actually changed any field
   const [isEditingAfterPreview, setIsEditingAfterPreview] = useState(false); // Track if user clicked "edit" after preview
-  const pollingRef = useRef<number | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const storedName = window.localStorage.getItem(USER_NAME_STORAGE_KEY);
+      if (storedName) {
+        setUserName(storedName);
+        setPendingUserName(storedName);
+        setShowNameModal(false);
+      } else {
+        setPendingUserName("");
+        setShowNameModal(true);
+      }
+    } catch (error) {
+      console.warn("Failed to access localStorage for user name:", error);
+      setPendingUserName("");
+      setShowNameModal(true);
+    }
+  }, []);
+
+  const openNameModal = () => {
+    setPendingUserName(userName || "");
+    setShowNameModal(true);
+  };
+
+  const handleNameConfirm = () => {
+    const trimmed = pendingUserName.trim();
+    if (!trimmed) {
+      return;
+    }
+    setUserName(trimmed);
+    try {
+      window.localStorage.setItem(USER_NAME_STORAGE_KEY, trimmed);
+    } catch (error) {
+      console.warn("Failed to persist user name:", error);
+    }
+    setShowNameModal(false);
+  };
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -198,8 +245,14 @@ export default function NewBoard() {
 
   const send = async () => {
     if (!input.trim() || uiState !== "idle") return;
+
+    if (!userName.trim()) {
+      openNameModal();
+      return;
+    }
     
-    const userMsg: AgentMessage = { role: "user", text: input };
+    const userTimestamp = new Date().toISOString();
+    const userMsg: AgentMessage = { role: "user", text: input, ts: userTimestamp };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
@@ -210,7 +263,8 @@ export default function NewBoard() {
       // Build conversation history for backend
       const conversationHistory: ConversationMessage[] = messages.map(m => ({
         role: m.role,
-        text: m.text
+        text: m.text,
+        timestamp: m.ts,
       }));
       
       const req: PreviewRequest = {
@@ -218,10 +272,13 @@ export default function NewBoard() {
         board_description: input,
         preferences: {},  // Let LLM decide layout based on user request
         conversation_history: conversationHistory,
+        session_id: sessionId || undefined,
+        user_name: userName.trim(),
       };
       
       const p = await api.preview(req);
       setPreview(p);
+      setSessionId(p.session_id);
       
       // Add agent response (buttons will appear if message includes "הבנתי")
       setMessages((m) => [
@@ -229,20 +286,27 @@ export default function NewBoard() {
         {
           role: "agent",
           text: p.summary,
+          ts: new Date().toISOString(),
         },
       ]);
     } catch (e: any) {
-      setMessages((m) => [...m, { role: "agent", text: `שגיאה: ${e.message}` }]);
+      setMessages((m) => [
+        ...m,
+        { role: "agent", text: `שגיאה: ${e.message}`, ts: new Date().toISOString() },
+      ]);
     } finally {
       setUiState("idle");
     }
   };
 
   const startGeneration = async () => {
-    if (!preview || uiState !== "idle") return;
+    if (!preview || uiState !== "idle" || !sessionId) return;
     
     setUiState("generating");
-    setMessages((m) => [...m, { role: "agent", text: "מתחיל ליצור את הלוח..." }]);
+    setMessages((m) => [
+      ...m,
+      { role: "agent", text: "מתחיל ליצור את הלוח...", ts: new Date().toISOString() },
+    ]);
     
     try {
       const res = await api.generateStart({
@@ -253,11 +317,18 @@ export default function NewBoard() {
         },
         profile: preview.profile,
         title,
+        session_id: sessionId,
+        user_name: userName.trim() || undefined,
       });
+      
+      setSessionId(res.session_id);
       
       startPolling(res.job_id);
     } catch (e: any) {
-      setMessages((m) => [...m, { role: "agent", text: `שגיאה: ${e.message}` }]);
+      setMessages((m) => [
+        ...m,
+        { role: "agent", text: `שגיאה: ${e.message}`, ts: new Date().toISOString() },
+      ]);
       setUiState("idle");
     }
   };
@@ -274,12 +345,19 @@ export default function NewBoard() {
           lastMessage = status.progress.message;
           setMessages((m) => {
             const lastMsg = m[m.length - 1];
+            const progressTimestamp = new Date().toISOString();
             if (lastMsg?.role === "agent" && lastMsg.text.includes("יוצר")) {
               // Replace last progress message
-              return [...m.slice(0, -1), { role: "agent", text: status.progress.message }];
+              return [
+                ...m.slice(0, -1),
+                { role: "agent", text: status.progress.message, ts: progressTimestamp },
+              ];
             } else {
               // Add new progress message
-              return [...m, { role: "agent", text: status.progress.message }];
+              return [
+                ...m,
+                { role: "agent", text: status.progress.message, ts: progressTimestamp },
+              ];
             }
           });
         }
@@ -308,12 +386,15 @@ export default function NewBoard() {
           
           setMessages((m) => [
             ...m.filter(msg => !msg.text.includes("יוצר תמונה")),
-            { role: "agent", text: "הלוח מוכן! גלול למטה לצפייה והורדה." },
+            { role: "agent", text: "הלוח מוכן! גלול למטה לצפייה והורדה.", ts: new Date().toISOString() },
           ]);
           setUiState("idle");
         } else if (status.progress.status === "error") {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          setMessages((m) => [...m, { role: "agent", text: status.progress.message }]);
+          setMessages((m) => [
+            ...m,
+            { role: "agent", text: status.progress.message, ts: new Date().toISOString() },
+          ]);
           setUiState("idle");
         }
       } catch (e: any) {
@@ -419,15 +500,14 @@ export default function NewBoard() {
   };
 
   const startNewConversation = () => {
-    setMessages([
-      { role: "agent", text: "שלום! אני הסוכן שלך ליצירת לוח תקשורת.\n\nבואו נתחיל - ספר/י לי על הלוח שאת/ה צריך/ה, ואני אשאל שאלות הבהרה לפי הצורך." },
-    ]);
+    setMessages([createInitialAgentMessage()]);
     setInput("");
     setPreview(null);
     setAssets(null);
     setGeneratedBoard(null);
     setIsEditingAfterPreview(false);
     setUiState("idle");
+    setSessionId(null);
   };
 
   // Quick test with existing images
@@ -455,20 +535,77 @@ export default function NewBoard() {
   };
 
   return (
-    <div dir="rtl" className="max-w-4xl mx-auto p-3 sm:p-6 space-y-4">
+    <>
+      {showNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg space-y-4" dir="rtl">
+            <div className="space-y-1 text-right">
+              <h2 className="text-lg font-semibold text-gray-900">ברוך/ה הבא/ה!</h2>
+              <p className="text-sm text-gray-600">
+                אנא הזן/י את שמך כדי שנוכל לשייך את ההפעלה הזו.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 text-right" htmlFor="user-name-input">
+                שם
+              </label>
+              <input
+                id="user-name-input"
+                type="text"
+                value={pendingUserName}
+                onChange={(e) => setPendingUserName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleNameConfirm();
+                  }
+                }}
+                className="w-full rounded-md border border-gray-300 p-2 text-right focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder={'לדוגמה: ד"ר כהן'}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              {userName && (
+                <button
+                  type="button"
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                  onClick={() => {
+                    setPendingUserName(userName);
+                    setShowNameModal(false);
+                  }}
+                >
+                  ביטול
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleNameConfirm}
+                className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:bg-gray-400"
+                disabled={!pendingUserName.trim()}
+              >
+                המשך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div dir="rtl" className="max-w-4xl mx-auto p-3 sm:p-6 space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h1 className="text-xl sm:text-2xl font-bold">סוכן יצירת לוח חדש</h1>
-        <button
-          onClick={() => {
-            setShowProfileForm(!showProfileForm);
-            if (!showProfileForm) {
-              setProfileWasModified(true); // Mark as modified when opened
-            }
-          }}
-          className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-md w-full sm:w-auto"
-        >
-          {showProfileForm ? "הסתר" : "פרטי מטופל"}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button
+            onClick={openNameModal}
+            className="px-3 py-2 text-sm border border-gray-300 bg-white hover:bg-gray-100 rounded-md w-full sm:w-auto text-right"
+          >
+            {userName ? `👤 ${userName}` : "הצג חלון להזנת שם"}
+          </button>
+          <button
+            onClick={() => setShowProfileForm(!showProfileForm)}
+            className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-md w-full sm:w-auto"
+          >
+            {showProfileForm ? "הסתר" : "פרטי מטופל"}
+          </button>
+        </div>
       </div>
 
       {/* Quick Test Section - Only show if enabled via env variable */}
@@ -506,6 +643,7 @@ export default function NewBoard() {
                 type="number"
                 value={patientProfile.age || ""}
                 onChange={(e) => {
+                  setProfileWasModified(true);
                   const age = parseInt(e.target.value) || undefined;
                   const updates: Partial<PatientProfile> = { age };
                   
@@ -536,7 +674,10 @@ export default function NewBoard() {
               <label className="block text-sm mb-1">מגדר</label>
               <select
                 value={patientProfile.gender || ""}
-                onChange={(e) => setPatientProfile({ ...patientProfile, gender: e.target.value || undefined })}
+                onChange={(e) => {
+                  setProfileWasModified(true);
+                  setPatientProfile({ ...patientProfile, gender: e.target.value || undefined });
+                }}
                 className="w-full border rounded-md p-2"
               >
                 <option value="">לא צוין</option>
@@ -550,7 +691,10 @@ export default function NewBoard() {
               <label className="block text-sm mb-1">האם קורא/ת?</label>
               <select
                 value={patientProfile.can_read === undefined ? "" : patientProfile.can_read ? "yes" : "no"}
-                onChange={(e) => setPatientProfile({ ...patientProfile, can_read: e.target.value === "yes" ? true : e.target.value === "no" ? false : undefined })}
+                onChange={(e) => {
+                  setProfileWasModified(true);
+                  setPatientProfile({ ...patientProfile, can_read: e.target.value === "yes" ? true : e.target.value === "no" ? false : undefined });
+                }}
                 className="w-full border rounded-md p-2"
               >
                 <option value="">לא צוין</option>
@@ -563,7 +707,10 @@ export default function NewBoard() {
               <input
                 type="text"
                 value={patientProfile.second_language || ""}
-                onChange={(e) => setPatientProfile({ ...patientProfile, second_language: e.target.value || undefined })}
+                onChange={(e) => {
+                  setProfileWasModified(true);
+                  setPatientProfile({ ...patientProfile, second_language: e.target.value || undefined });
+                }}
                 className="w-full border rounded-md p-2"
                 placeholder="לדוגמה: אנגלית"
               />
@@ -572,7 +719,10 @@ export default function NewBoard() {
               <label className="block text-sm mb-1">דת/מגזר</label>
               <select
                 value={patientProfile.sector || ""}
-                onChange={(e) => setPatientProfile({ ...patientProfile, sector: e.target.value || undefined })}
+                onChange={(e) => {
+                  setProfileWasModified(true);
+                  setPatientProfile({ ...patientProfile, sector: e.target.value || undefined });
+                }}
                 className="w-full border rounded-md p-2"
               >
                 <option value="יהודי">יהודי</option>
@@ -584,7 +734,10 @@ export default function NewBoard() {
               <label className="block text-sm mb-1">דתיות</label>
               <select
                 value={patientProfile.religion || ""}
-                onChange={(e) => setPatientProfile({ ...patientProfile, religion: e.target.value || undefined })}
+                onChange={(e) => {
+                  setProfileWasModified(true);
+                  setPatientProfile({ ...patientProfile, religion: e.target.value || undefined });
+                }}
                 className="w-full border rounded-md p-2"
               >
                 <option value="דתי">דתי</option>
@@ -624,7 +777,10 @@ export default function NewBoard() {
                   onClick={() => {
                     setPreview(null);
                     setIsEditingAfterPreview(true);
-                    setMessages((m) => [...m, { role: "agent", text: "בסדר, מה תרצה לשנות?" }]);
+                    setMessages((m) => [
+                      ...m,
+                      { role: "agent", text: "בסדר, מה תרצה לשנות?", ts: new Date().toISOString() },
+                    ]);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium w-full sm:w-auto"
                 >
@@ -812,7 +968,7 @@ export default function NewBoard() {
             <div className="text-center">
               <a 
                 className="text-blue-600 underline hover:text-blue-800" 
-                href={assets.pdf_url} 
+                href={`${import.meta.env.VITE_API_BASE_URL || ""}${assets.pdf_url}`}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -822,7 +978,8 @@ export default function NewBoard() {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

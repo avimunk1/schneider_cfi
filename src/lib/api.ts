@@ -1,6 +1,7 @@
 export type ConversationMessage = {
   role: string;
   text: string;
+  timestamp?: string;
 };
 
 export type PreviewRequest = {
@@ -18,6 +19,8 @@ export type PreviewRequest = {
     second_language?: string;
   };
   conversation_history?: ConversationMessage[];
+  session_id?: string;
+  user_name?: string;
 };
 
 export type PreviewResponse = {
@@ -25,21 +28,29 @@ export type PreviewResponse = {
   profile: { labels_languages: string[]; image_style: string };
   checks: { ok: boolean; missing: string[] };
   summary: string;
+  session_id: string;
+  user_name?: string;
 };
 
 export type GenerateRequest = {
   parsed: { layout: string; entities: string[]; topic?: string };
   profile: { labels_languages: string[]; image_style: string };
   title: string;
+  session_id: string;
+  user_name?: string;
 };
 
 export type GenerateResponse = {
   assets: { png_url: string; pdf_url: string };
   timings_ms: { images: number; render: number };
+  session_id: string;
+  user_name?: string;
 };
 
 export type GenerateStartResponse = {
   job_id: string;
+  session_id: string;
+  user_name?: string;
 };
 
 export type ProgressResponse = {

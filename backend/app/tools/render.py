@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
@@ -74,6 +74,17 @@ def _prepare_text_for_display(text: str) -> str:
     return text
 
 
+def _build_prefix(prefix: Optional[str]) -> str:
+    if not prefix:
+        return ""
+    safe = "".join(ch for ch in str(prefix) if ch.isalnum() or ch in {"-", "_"})
+    if not safe:
+        return ""
+    if not safe.endswith("_"):
+        safe = f"{safe}_"
+    return safe
+
+
 def render_board(
     layout: str,
     title: str,
@@ -81,6 +92,7 @@ def render_board(
     image_paths: List[str],
     labels_per_entity: List[Dict[str, str]],
     assets_dir: str,
+    prefix: Optional[str] = None,
 ) -> Tuple[str, str]:
     rows, cols = _grid_for_layout(layout)
     cell_w, cell_h = 400, 420
@@ -145,8 +157,9 @@ def render_board(
             draw.text((x + (cell_w - lw2) / 2, y + cell_h - 22), display_line2, fill=(60, 60, 60), font=font_label)
 
     # Save PNG
-    png_name = f"board_{uuid.uuid4().hex[:8]}.png"
-    pdf_name = f"board_{uuid.uuid4().hex[:8]}.pdf"
+    name_prefix = _build_prefix(prefix)
+    png_name = f"{name_prefix}board_{uuid.uuid4().hex[:8]}.png"
+    pdf_name = f"{name_prefix}board_{uuid.uuid4().hex[:8]}.pdf"
     assets.mkdir(parents=True, exist_ok=True)
     board.save(assets / png_name, format="PNG")
 

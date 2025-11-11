@@ -21,6 +21,7 @@ class Preferences(BaseModel):
 class ConversationMessage(BaseModel):
     role: str  # "user" | "agent"
     text: str
+    timestamp: Optional[str] = None
 
 
 class PreviewRequest(BaseModel):
@@ -28,6 +29,8 @@ class PreviewRequest(BaseModel):
     board_description: str
     preferences: Optional[Preferences] = None
     conversation_history: List[ConversationMessage] = Field(default_factory=list)
+    session_id: Optional[str] = None
+    user_name: Optional[str] = None
 
 
 class ParsedBoard(BaseModel):
@@ -57,6 +60,8 @@ class PreviewResponse(BaseModel):
     profile: PreviewProfile
     checks: Checks
     summary: str
+    session_id: str
+    user_name: Optional[str] = None
 
 
 class GenerateParsed(BaseModel):
@@ -80,6 +85,8 @@ class GenerateRequest(BaseModel):
     parsed: GenerateParsed
     profile: GenerateProfile
     title: str
+    session_id: str
+    user_name: Optional[str] = None
 
 
 class Assets(BaseModel):
@@ -96,6 +103,8 @@ class Timings(BaseModel):
 class GenerateResponse(BaseModel):
     assets: Assets
     timings_ms: Timings
+    session_id: str
+    user_name: Optional[str] = None
 
 
 class GenerationProgress(BaseModel):
@@ -113,5 +122,7 @@ class ProgressResponse(BaseModel):
 
 class GenerateStartResponse(BaseModel):
     job_id: str
+    session_id: str
+    user_name: Optional[str] = None
 
 
