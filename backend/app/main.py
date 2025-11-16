@@ -5,9 +5,10 @@ import threading
 import traceback
 from pathlib import Path
 from typing import Dict
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from . import schemas
 from . import orchestrator
@@ -20,6 +21,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Railway volume will be mounted at /app/assets in production
 ASSETS_DIR = Path(os.getenv("ASSETS_PATH", BASE_DIR.parent / "assets"))
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Logs directory for analytics/feedback CSV files
+LOG_DIR = Path(os.getenv("SESSION_LOG_PATH", ASSETS_DIR / "logs"))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+# Admin authentication token
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "change-this-in-production")
 
 # In-memory progress store (use Redis for production)
 _generation_status: Dict[str, schemas.GenerationProgress] = {}
@@ -150,5 +158,93 @@ def api_feedback(req: schemas.FeedbackRequest):
     except Exception as e:
         logger.error("Feedback submission failed", request_id=request_id, error=str(e), exc_info=True)
         raise HTTPException(status_code=400, detail={"message": str(e), "request_id": request_id})
+
+
+# ============================================================================
+# Admin Endpoints - Download Analytics & Logs
+# ============================================================================
+
+def verify_admin_token(authorization: str = Header(None)):
+    """Verify admin authentication token"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
+    # Support both "Bearer TOKEN" and just "TOKEN" format
+    token = authorization.replace("Bearer ", "").strip()
+    
+    if token != ADMIN_TOKEN:
+        logger.warning("Unauthorized admin access attempt")
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    
+    return token
+
+
+@app.get("/api/admin/logs/kpis")
+def download_kpis(token: str = Depends(verify_admin_token)):
+    """Download conversation KPIs CSV file
+    
+    Contains session summaries with metrics like duration, images created, etc.
+    
+    Usage:
+        curl -H "Authorization: Bearer YOUR_TOKEN" \
+             https://your-backend.railway.app/api/admin/logs/kpis \
+             -o kpis.csv
+    """
+    file_path = LOG_DIR / "conversation_kpis.csv"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="KPIs file not found. No sessions recorded yet.")
+    
+    logger.info("Admin downloading KPIs file", file_size=file_path.stat().st_size)
+    return FileResponse(
+        path=str(file_path),
+        filename="conversation_kpis.csv",
+        media_type="text/csv"
+    )
+
+
+@app.get("/api/admin/logs/details")
+def download_details(token: str = Depends(verify_admin_token)):
+    """Download detailed conversation logs (NDJSON format)
+    
+    Contains full conversation history, LLM outputs, errors, and assets for each session.
+    
+    Usage:
+        curl -H "Authorization: Bearer YOUR_TOKEN" \
+             https://your-backend.railway.app/api/admin/logs/details \
+             -o details.ndjson
+    """
+    file_path = LOG_DIR / "conversation_details.ndjson"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Details file not found. No sessions recorded yet.")
+    
+    logger.info("Admin downloading details file", file_size=file_path.stat().st_size)
+    return FileResponse(
+        path=str(file_path),
+        filename="conversation_details.ndjson",
+        media_type="application/x-ndjson"
+    )
+
+
+@app.get("/api/admin/logs/feedback")
+def download_feedback(token: str = Depends(verify_admin_token)):
+    """Download user feedback CSV file
+    
+    Contains user ratings and comments for each session.
+    
+    Usage:
+        curl -H "Authorization: Bearer YOUR_TOKEN" \
+             https://your-backend.railway.app/api/admin/logs/feedback \
+             -o feedback.csv
+    """
+    file_path = LOG_DIR / "user_feedback.csv"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Feedback file not found. No feedback submitted yet.")
+    
+    logger.info("Admin downloading feedback file", file_size=file_path.stat().st_size)
+    return FileResponse(
+        path=str(file_path),
+        filename="user_feedback.csv",
+        media_type="text/csv"
+    )
 
 
