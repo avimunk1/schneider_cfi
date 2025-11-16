@@ -188,7 +188,6 @@ export default function NewBoard() {
     religion: "לא דתי",
   });
   const [showProfileForm, setShowProfileForm] = useState(true); // Open by default
-  const [profileWasModified, setProfileWasModified] = useState(false); // Track if user actually changed any field
   const [isEditingAfterPreview, setIsEditingAfterPreview] = useState(false); // Track if user clicked "edit" after preview
   const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
   const [feedbackComment, setFeedbackComment] = useState<string>("");
@@ -271,7 +270,7 @@ export default function NewBoard() {
       }));
       
       const req: PreviewRequest = {
-        patient_profile: profileWasModified ? patientProfile : {},  // Only send profile if user opened the form
+        patient_profile: patientProfile,  // Always send profile data with defaults
         board_description: input,
         preferences: {},  // Let LLM decide layout based on user request
         conversation_history: conversationHistory,
@@ -665,7 +664,6 @@ export default function NewBoard() {
                 type="number"
                 value={patientProfile.age || ""}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   const age = parseInt(e.target.value) || undefined;
                   const updates: Partial<PatientProfile> = { age };
                   
@@ -697,7 +695,6 @@ export default function NewBoard() {
               <select
                 value={patientProfile.gender || ""}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   setPatientProfile({ ...patientProfile, gender: e.target.value || undefined });
                 }}
                 className="w-full border rounded-md p-2"
@@ -714,7 +711,6 @@ export default function NewBoard() {
               <select
                 value={patientProfile.can_read === undefined ? "" : patientProfile.can_read ? "yes" : "no"}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   setPatientProfile({ ...patientProfile, can_read: e.target.value === "yes" ? true : e.target.value === "no" ? false : undefined });
                 }}
                 className="w-full border rounded-md p-2"
@@ -730,7 +726,6 @@ export default function NewBoard() {
                 type="text"
                 value={patientProfile.second_language || ""}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   setPatientProfile({ ...patientProfile, second_language: e.target.value || undefined });
                 }}
                 className="w-full border rounded-md p-2"
@@ -742,7 +737,6 @@ export default function NewBoard() {
               <select
                 value={patientProfile.sector || ""}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   setPatientProfile({ ...patientProfile, sector: e.target.value || undefined });
                 }}
                 className="w-full border rounded-md p-2"
@@ -757,7 +751,6 @@ export default function NewBoard() {
               <select
                 value={patientProfile.religion || ""}
                 onChange={(e) => {
-                  setProfileWasModified(true);
                   setPatientProfile({ ...patientProfile, religion: e.target.value || undefined });
                 }}
                 className="w-full border rounded-md p-2"
