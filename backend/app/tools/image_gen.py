@@ -59,10 +59,19 @@ def _generate_with_gemini(entity: str, prompt_text: str, assets: Path, prefix: O
 
         logger.debug("Gemini response received", response_type=str(type(response)))
         
-        # Extract inline image data if available
+        # Check for safety filter blocks
         if response and response.candidates:
-            logger.debug("Processing candidates", candidate_count=len(response.candidates))
             candidate = response.candidates[0]
+            
+            # Log finish reason for debugging
+            if hasattr(candidate, 'finish_reason'):
+                logger.debug("Candidate finish reason", finish_reason=str(candidate.finish_reason), entity=entity)
+                # If blocked by safety filters, log it clearly
+                if 'SAFETY' in str(candidate.finish_reason):
+                    logger.warning("Content blocked by safety filters", entity=entity, finish_reason=str(candidate.finish_reason))
+                    return None
+            
+            logger.debug("Processing candidates", candidate_count=len(response.candidates))
             logger.debug("Candidate parts", parts_count=len(candidate.content.parts))
             
             for i, part in enumerate(candidate.content.parts):

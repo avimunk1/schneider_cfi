@@ -53,10 +53,11 @@ Analyze the user's description and patient profile, then return a JSON response 
 CRITICAL RESPONSE STYLE:
 - Use FUTURE tense: "אצור לך" (I will create), NOT past tense "יצרתי" (I created)
 - Start with "הבנתי" (I understood) to acknowledge the request
-- EXPLICITLY list ALL the items that will be in the board
+- EXPLICITLY list ALL the items that will be in the board ONCE (do not repeat the list)
 - If patient profile IS provided: CLEARLY list the profile info with checkmarks (✓)
 - If patient profile NOT provided: Don't mention it at all - just focus on the board
-- End with simple confirmation: "האם להתחיל ביצירת הלוח?"
+- ALWAYS end with simple confirmation: "האם להתחיל ביצירת הלוח?" (in Hebrew) or "Should I start creating the board?" (in English)
+- NEVER add extra lines after listing the items - go straight to the confirmation question
 
 Example Hebrew response when NO profile provided:
 "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים:
@@ -76,7 +77,15 @@ Example when profile IS provided:
 
 האם להתחיל ביצירת הלוח?"
 
+Example when profile PARTIALLY provided (some fields missing):
+"הבנתי, אני אצור לך לוח 2x2 עם הפריטים הבאים: משפחה, תפילה, חברים, אהבה.
+
+לא צוין גיל המטופל, אשתמש בהגדרות ברירת מחדל.
+
+האם להתחיל ביצירת הלוח?"
+
 Guidelines:
+- CRITICAL: List the items EXACTLY ONCE and then immediately go to confirmation question. NEVER repeat or summarize the items list again!
 - RECOGNIZE GREETINGS: If user just says greetings like "שלום", "בוקר טוב", "היי", "hello" WITHOUT a board request, respond with needs_clarification=true
 - ASK FOR TOPIC: When there's no clear board topic, ask: "שלום! איזה לוח תקשורת תרצה ליצור?" (Hello! What communication board would you like to create?)
 - if the user mentined infomation about the patient, use it to create the board. 
@@ -100,12 +109,12 @@ Examples:
 - User: "breakfast board with 3 verbs, 3 adjectives, 3 pronouns"
   → entities: ["eat", "drink", "pour", "hot", "cold", "good", "I", "you", "he"]
   → layout: "3x3"
-  → reasoning: "I understood. I will create a 3x3 board with these items: eat, drink, pour (3 verbs), hot, cold, good (3 adjectives), I, you, he (3 pronouns). You didn't specify the patient's age or whether they can read. Should I use realistic images?"
+  → reasoning: "I understood. I will create a 3x3 board with these items:\n- Verbs (3): eat, drink, pour\n- Adjectives (3): hot, cold, good\n- Pronouns (3): I, you, he\n\nShould I start creating the board?"
   
 - User in Hebrew: "לוח ארוחת בוקר 3x3 עם 3 פעלים, 3 תארים, 3 שמות גוף"
   → entities: ["לאכול", "לשתות", "לרצות", "חם", "קר", "טוב", "אני", "אתה", "הוא"]
   → layout: "3x3"
-  → reasoning: "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים:\n- פעלים (3): לאכול, לשתות, לרצות\n- תארים (3): חם, קר, טוב\n- שמות גוף (3): אני, אתה, הוא\n\nלא ציינת את גיל המטופל. האם זה ילד או מבוגר? גם לא ציינת האם הוא/היא קוראים - האם ליצור תמונות מפורשות או אייקונים?"
+  → reasoning: "הבנתי, אני אצור לך לוח 3x3 עם הפריטים הבאים:\n- פעלים (3): לאכול, לשתות, לרצות\n- תארים (3): חם, קר, טוב\n- שמות גוף (3): אני, אתה, הוא\n\nהאם להתחיל ביצירת הלוח?"
 """
 
     # Check if patient profile has any meaningful data
@@ -163,31 +172,67 @@ def build_image_prompts(entities: List[str], patient_profile: Dict, image_style:
     if has_profile:
         age = patient_profile.get("age", 10)
         gender = patient_profile.get("gender", "child")
-        religion = patient_profile.get("religion", "")  # דתי/לא דתי
-        sector = patient_profile.get("sector", "")  # מוסלמי/חרדי/דתי etc
+        religion = patient_profile.get("religion", "")  # דתי/לא דתי/מסורתי
+        sector = patient_profile.get("sector", "")  # יהודי/מוסלמי/חרדי/דתי/נוצרי/דרוזי/חילוני
         
-        # Build cultural context
+        # Build cultural context based on sector AND religiosity level
         cultural_context = ""
+        
+        # Check if user explicitly marked as NOT religious
+        is_not_religious = religion and "לא דתי" in religion.lower()
+        is_secular = sector and "חילוני" in sector.lower()
+        
         if sector:
-            if sector == "מוסלמי":
-                cultural_context = "Muslim family with appropriate modest clothing (hijab for women/girls, traditional dress)"
-            elif sector == "חרדי":
-                cultural_context = "Ultra-Orthodox Jewish family with traditional dress (women in modest clothing, men with kippa/hat)"
-            elif sector == "דתי":
-                cultural_context = "Religious Jewish family with appropriate dress (women in modest clothing, men with kippa)"
-            elif sector == "נוצרי":
-                cultural_context = "Christian Arab family with appropriate cultural context"
-            elif sector == "דרוזי":
-                cultural_context = "Druze family with appropriate cultural dress"
+            # Determine if we should AVOID religious symbols
+            if is_not_religious or is_secular:
+                # SECULAR / NOT RELIGIOUS - explicitly avoid religious symbols
+                if sector in ["יהודי", "חילוני"] or "יהוד" in sector:
+                    cultural_context = (
+                        "Secular Israeli Jewish family - CRITICAL: ABSOLUTELY NO religious symbols or items. "
+                        "NO kippa/yarmulke, NO menorah, NO synagogue, NO prayer scenes, NO tallit, NO religious books. "
+                        "Show modern Israeli cultural context (e.g., typical Israeli home, casual clothing) "
+                        "WITHOUT any religious elements. People should wear normal casual/modern clothing."
+                    )
+                elif sector == "מוסלמי":
+                    cultural_context = (
+                        "Secular Muslim family - culturally Muslim but CRITICAL: avoid explicit religious symbols. "
+                        "NO mandatory hijab, NO mosque, NO prayer scenes. Show modern modest clothing, "
+                        "but without religious practice imagery."
+                    )
+                elif sector == "נוצרי":
+                    cultural_context = (
+                        "Secular Christian Arab family - avoid explicit religious symbols "
+                        "(no crosses, no church scenes, no religious rituals). Modern cultural representation."
+                    )
+                else:
+                    cultural_context = f"Secular {sector} family - avoid religious symbols and ritual imagery"
+            
             else:
-                cultural_context = f"{sector} family with culturally appropriate representation"
+                # RELIGIOUS / TRADITIONAL - show appropriate religious/cultural context
+                if sector == "חרדי":
+                    cultural_context = "Ultra-Orthodox Jewish family with traditional dress (women in modest clothing, men with kippa/hat)"
+                elif sector == "דתי" or (sector == "יהודי" and religion and "דתי" in religion):
+                    cultural_context = "Religious Jewish family with appropriate dress (women in modest clothing, men with kippa)"
+                elif sector == "מוסלמי" and not is_not_religious:
+                    cultural_context = "Muslim family with appropriate modest clothing (hijab for women/girls, traditional dress)"
+                elif sector == "נוצרי" and not is_not_religious:
+                    cultural_context = "Christian Arab family with appropriate cultural context"
+                elif sector == "דרוזי":
+                    cultural_context = "Druze family with appropriate cultural dress"
+                elif religion and "מסורתי" in religion:
+                    cultural_context = "Traditional Jewish family with light religious elements (men may wear kippa on special occasions)"
+                elif sector == "יהודי" or "יהוד" in sector:
+                    # Jewish but religion not specified - use neutral representation
+                    cultural_context = "Israeli Jewish family with typical Israeli cultural representation"
+                else:
+                    cultural_context = f"{sector} family with culturally appropriate representation"
         
         profile_section = f"""
 Patient context:
 - Age: {age}
 - Gender: {gender}
 - Cultural background: {sector if sector else "not specified"}
-- Religious: {religion if religion else "not specified"}
+- Religiosity level: {religion if religion else "not specified"}
 
 CRITICAL CULTURAL SENSITIVITY:
 {cultural_context if cultural_context else "Use culturally neutral representation"}
@@ -210,6 +255,13 @@ For abstract concepts (verbs, adjectives, pronouns), show them IN CONTEXT:
   - "eat" → person eating breakfast, NOT generic eating
   - "drink" → person drinking from cup, NOT water bottle
   - "I/you/he" → person at breakfast table in relevant pose
+
+SPECIAL HANDLING FOR EMOTIONAL CONCEPTS (to avoid AI safety filters):
+- "love" / "אהבה" → Show WHOLESOME family affection: parent hugging child, family holding hands, or heart-shaped object (like a heart-shaped cushion or drawing). NEVER romantic love. Use phrases like "parent lovingly hugging young child" or "family showing affection with a hug"
+- "friendship" / "חברות" → Children playing together, sharing toys, or holding hands while playing
+- "happiness" / "שמחה" → Smiling child with arms raised in joy, or child laughing while playing
+- "care" / "דאגה" → Parent gently tending to child (e.g., bandaging knee, comforting)
+These concepts MUST be depicted in INNOCENT, WHOLESOME, FAMILY-APPROPRIATE ways that clearly pass content safety filters.
 
 For each entity, create a detailed prompt optimized for Google's Gemini image generation that:
 - Describes a single, clear scene or object on white background

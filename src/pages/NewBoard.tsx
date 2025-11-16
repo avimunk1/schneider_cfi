@@ -180,8 +180,8 @@ export default function NewBoard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [showNameModal, setShowNameModal] = useState<boolean>(false);
   const [patientProfile, setPatientProfile] = useState<PatientProfile>({
-    age: 50,
-    gender: "גבר",
+    age: 8,
+    gender: "ילד",
     can_read: true,
     second_language: "עברית",
     sector: "יהודי",

@@ -78,7 +78,8 @@ def handle_preview(req: schemas.PreviewRequest) -> schemas.PreviewResponse:
         parsed = schemas.ParsedBoard(topic=topic, entities=entities, layout=layout)
         checks = validate_requirements(norm, parsed.model_dump())
 
-        summary_text = f"{reasoning}\n\nאני אכין לוח {layout} עם {len(entities)} פריטים: {', '.join(entities[:3])}..."
+        # Use the LLM's reasoning as-is - it already contains the complete formatted response
+        summary_text = reasoning
         conversation_logger.record_preview_result(
             session_id=session_id,
             summary=summary_text,
